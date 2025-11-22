@@ -227,130 +227,195 @@ class _SignupPageState extends State<SignupPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              children: [
-                const SizedBox(height: 30),
-                Image.asset(
-                  "assets/1.png",
-                  height: 180,
-                  fit: BoxFit.contain,
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  "Enter Your Phonenumber",
-                  style: TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.w500,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final bool isTablet = constraints.maxWidth > 650;
+            final double horizontalPadding = isTablet ? 64 : 20;
+            final BoxDecoration background = const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xfffdf2f4), Color(0xfff0f4ff)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            );
+
+            return Container(
+              decoration: background,
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: horizontalPadding,
+                    vertical: 32,
                   ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 4,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: IconButton(
+                            onPressed: () => Navigator.of(context).maybePop(),
+                            icon: const Icon(Icons.arrow_back_ios_new),
+                          ),
                         ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xffE8E9FF),
-                          borderRadius: BorderRadius.circular(10),
+                        const SizedBox(height: 10),
+                        Center(
+                          child: Image.asset(
+                            "assets/1.png",
+                            height: isTablet ? 200 : 160,
+                            fit: BoxFit.contain,
+                          ),
                         ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<CountryDialCode>(
-                            isExpanded: true,
-                            value: _selectedCountry,
-                            borderRadius: BorderRadius.circular(12),
-                            items: _countryCodes
-                                .map(
-                                  (country) => DropdownMenuItem(
-                                    value: country,
-                                    child: Text(
-                                      '${country.name} (${country.code})',
-                                      style: const TextStyle(fontSize: 16),
+                        const SizedBox(height: 24),
+                        Text(
+                          "Verify your number",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: isTablet ? 26 : 22,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "We'll send an OTP to confirm your phone number.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.black54,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: EdgeInsets.all(isTablet ? 32 : 22),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(28),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.06),
+                                blurRadius: 30,
+                                offset: const Offset(0, 18),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              InputDecorator(
+                                decoration: InputDecoration(
+                                  labelText: "Country / Region",
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  filled: true,
+                                  fillColor: const Color(0xfff7f8ff),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<CountryDialCode>(
+                                    value: _selectedCountry,
+                                    isExpanded: true,
+                                    items: _countryCodes
+                                        .map(
+                                          (country) => DropdownMenuItem(
+                                            value: country,
+                                            child: Text(
+                                              '${country.name} (${country.code})',
+                                              style:
+                                                  const TextStyle(fontSize: 16),
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (value) {
+                                      if (value == null) return;
+                                      setState(() {
+                                        _selectedCountry = value;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              TextField(
+                                controller: phoneController,
+                                keyboardType: TextInputType.phone,
+                                decoration: InputDecoration(
+                                  labelText: "Phone Number",
+                                  prefixText: _selectedCountry.code,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  filled: true,
+                                  fillColor: const Color(0xfff7f8ff),
+                                ),
+                              ),
+                              if (_selectedCountry.requiresBillingPlan)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 12),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: const [
+                                      Icon(Icons.info_outline,
+                                          size: 18, color: Colors.red),
+                                      SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          "SMS delivery in this region may require Firebase Blaze billing due to carrier filtering.",
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              const SizedBox(height: 28),
+                              SizedBox(
+                                height: 52,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xff111827),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18),
                                     ),
                                   ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              if (value == null) return;
-                              setState(() {
-                                _selectedCountry = value;
-                              });
-                            },
+                                  onPressed: _verifyPhoneNumber,
+                                  child: const Text(
+                                    "Send code",
+                                    style: TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      flex: 2,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xffE8E9FF),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: TextField(
-                          controller: phoneController,
-                          keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            hintText: "Phone Number",
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (_selectedCountry.requiresBillingPlan)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Row(
-                      children: const [
-                        Icon(Icons.info_outline, size: 18, color: Colors.red),
-                        SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            "SMS delivery in this region may require Firebase Blaze billing due to carrier filtering.",
+                        const SizedBox(height: 26),
+                        TextButton(
+                          onPressed: () {},
+                          child: const Text(
+                            "Need help?",
                             style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.red,
+                              fontSize: 15,
+                              decoration: TextDecoration.underline,
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                const SizedBox(height: 40),
-                SizedBox(
-                  width: 180,
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xffFF9FA0),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(25)),
-                    ),
-                    onPressed: _verifyPhoneNumber,
-                    child: const Text(
-                      "Verify",
-                      style: TextStyle(
-                          fontSize: 20,
-                          color: Colors.black,
-                          fontWeight: FontWeight.bold),
-                    ),
-                  ),
                 ),
-                const SizedBox(height: 30),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       ),
     );

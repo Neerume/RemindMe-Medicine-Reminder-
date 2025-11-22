@@ -8,8 +8,9 @@ import '../routes.dart'; // Adjust this path if routes.dart is not in lib/
 // or manage their own state without needing named route push for their initial display.
 // The important part is how you navigate *from* these screens.
 import 'view_all_medicine.dart';
-import 'schedule_screen.dart';
+import 'caregiver_screen.dart';
 import 'profile_screen.dart';
+import '../services/medicine_history_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -29,7 +30,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _widgetOptions = <Widget>[
       const _HomeContent(), // Your original dashboard's home content
       const ViewAllMedicinesScreen(), // "Medicines" tab content (using corrected name)
-      const ScheduleScreen(), // "Schedule" tab content
+      const CaregiverScreen(), // "Caregiver" tab content (replaced Schedule)
       const ProfileScreen(), // "Profile" tab content
     ];
   }
@@ -78,10 +79,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.history_rounded, size: 28),
+                  icon: const Icon(Icons.notifications_rounded, size: 28),
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('View History')),
+                      const SnackBar(content: Text('Notifications')),
                     );
                   },
                   color: Colors.grey[700],
@@ -106,8 +107,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             label: 'Medicines',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month),
-            label: 'Schedule',
+            icon: Icon(Icons.people),
+            label: 'Caregiver',
           ),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
@@ -269,10 +270,22 @@ class _HomeContent extends StatelessWidget {
                 color: Colors.green,
                 size: 30,
               ),
-              onPressed: () {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text('$medicineName taken!')));
+              onPressed: () async {
+                // Save to medicine history
+                await MedicineHistoryService.addMedicineRecord(
+                  MedicineRecord(
+                    medicineName: medicineName,
+                    time: time,
+                    dosage: dosage,
+                    dateTaken: DateTime.now(),
+                  ),
+                );
+                
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('$medicineName taken!')),
+                  );
+                }
               },
             ),
           ],

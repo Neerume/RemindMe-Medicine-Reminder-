@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 // Import your routes.dart file to use named routes
 import '../routes.dart'; // Adjust this path if routes.dart is not in lib/
+import '../services/user_data_service.dart';
 
 class NamePage extends StatefulWidget {
   const NamePage({super.key});
@@ -87,11 +89,25 @@ class _NamePageState extends State<NamePage> {
                         borderRadius: BorderRadius.circular(25),
                       ),
                     ),
-                    onPressed: () {
-                      // *** CHANGE MADE HERE: Navigate to Dashboard after "Done" ***
-                      // You might save the nameController.text here before navigating
-                      Navigator.of(context)
-                          .pushReplacementNamed(AppRoutes.dashboard);
+                    onPressed: () async {
+                      // Save user data
+                      final user = FirebaseAuth.instance.currentUser;
+                      final userId = user?.uid ?? 'user_${DateTime.now().millisecondsSinceEpoch}';
+                      final username = nameController.text.trim();
+                      final email = user?.email ?? '';
+                      final phone = user?.phoneNumber ?? '';
+                      final navigator = Navigator.of(context);
+
+                      await UserDataService.saveUserData(
+                        email: email,
+                        phone: phone,
+                        username: username.isEmpty ? 'User${userId.substring(0, 6)}' : username,
+                        userId: userId,
+                      );
+
+                      if (!mounted) return;
+
+                      navigator.pushReplacementNamed(AppRoutes.dashboard);
                     },
                     child: const Text(
                       "Done",

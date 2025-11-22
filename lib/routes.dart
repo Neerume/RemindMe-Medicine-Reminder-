@@ -9,7 +9,7 @@ import 'View/name.dart';
 import 'View/dashboard_screen.dart';
 import 'View/add_medicine_screen.dart'; // Assuming this is the correct file for AddMedicineScreen
 import 'View/view_all_medicine.dart'; // Assuming this is the correct file for ViewAllMedicinesScreen
-import 'View/schedule_screen.dart';
+import 'View/caregiver_screen.dart';
 import 'View/profile_screen.dart';
 // If you have a 'new.dart' in View folder and want to use it, uncomment and specify class
 // import 'View/new.dart';
@@ -22,8 +22,8 @@ class AppRoutes {
   static const String dashboard = '/dashboard';
   static const String addMedicine = '/add_medicine'; // Renamed for consistency
   static const String viewAll = '/view_all'; // Renamed for consistency
-  static const String schedule = '/schedule';
-  static const String profile = '/profile';
+    static const String caregiver = '/caregiver';
+    static const String profile = '/profile';
   static const String newScreen =
       '/new_screen'; // If you actually have a new screen
 
@@ -73,7 +73,7 @@ class AppRoutes {
     AppRoutes.dashboard: (context) => const DashboardScreen(),
     AppRoutes.addMedicine: (context) => const AddMedicineScreen(),
     AppRoutes.viewAll: (context) => const ViewAllMedicinesScreen(),
-    AppRoutes.schedule: (context) => const ScheduleScreen(),
+    AppRoutes.caregiver: (context) => const CaregiverScreen(),
     AppRoutes.profile: (context) => const ProfileScreen(),
     // AppRoutes.newScreen: (context) => const NewScreenPage(), // Uncomment if you have this
   };

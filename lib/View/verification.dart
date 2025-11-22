@@ -30,8 +30,8 @@ class VerificationPage extends StatefulWidget {
 }
 
 class _VerificationPageState extends State<VerificationPage> {
-  final List<TextEditingController> otpControllers =
-      List.generate(6, (index) => TextEditingController());
+  final TextEditingController _otpInputController = TextEditingController();
+  final FocusNode _otpFocusNode = FocusNode();
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
@@ -48,6 +48,7 @@ class _VerificationPageState extends State<VerificationPage> {
   @override
   void initState() {
     super.initState();
+    _otpInputController.addListener(_handleOtpInputChange);
     if (_isFirebaseMode) {
       _currentVerificationId = widget.verificationId;
       _currentResendToken = widget.resendToken;
@@ -55,18 +56,32 @@ class _VerificationPageState extends State<VerificationPage> {
       _currentOtp = widget.otp ?? '';
       _expiresAt = widget.expiresAt ?? DateTime.now();
     }
-    for (int i = 0; i < 6; i++) {
-      otpControllers[i].addListener(() {
-        if (otpControllers[i].text.length == 1 && i < 5) {
-          FocusScope.of(context).nextFocus();
-        } else if (otpControllers[i].text.isEmpty && i > 0) {
-          FocusScope.of(context).previousFocus();
-        }
-      });
-    }
     if (!_isFirebaseMode) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _showOtpHint());
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _otpFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _handleOtpInputChange() {
+    if (!mounted) return;
+    final digitsOnly = _otpInputController.text.replaceAll(RegExp(r'\D'), '');
+    String sanitized = digitsOnly;
+    if (digitsOnly.length > 6) {
+      sanitized = digitsOnly.substring(0, 6);
+    }
+    if (sanitized != _otpInputController.text) {
+      _otpInputController.value = TextEditingValue(
+        text: sanitized,
+        selection: TextSelection.collapsed(offset: sanitized.length),
+      );
+      return;
+    }
+    setState(() {});
   }
 
   void _navigateBackToSignup() {
@@ -122,7 +137,7 @@ class _VerificationPageState extends State<VerificationPage> {
       !_isFirebaseMode && DateTime.now().isAfter(_expiresAt);
 
   Future<void> _verifyOtp() async {
-    final smsCode = otpControllers.map((c) => c.text).join();
+    final smsCode = _otpInputController.text;
     if (smsCode.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please enter the 6-digit code.")),
@@ -131,8 +146,7 @@ class _VerificationPageState extends State<VerificationPage> {
     }
 
     if (_isFirebaseMode) {
-      if (_currentVerificationId == null ||
-          _currentVerificationId!.isEmpty) {
+      if (_currentVerificationId == null || _currentVerificationId!.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
               content: Text(
@@ -236,9 +250,8 @@ class _VerificationPageState extends State<VerificationPage> {
       _currentOtp = newOtp;
       _expiresAt = now.add(widget.validity);
       _hasShownOtp = false;
-      for (final controller in otpControllers) {
-        controller.clear();
-      }
+      _otpInputController.clear();
+      _otpFocusNode.requestFocus();
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -250,9 +263,9 @@ class _VerificationPageState extends State<VerificationPage> {
 
   @override
   void dispose() {
-    for (var controller in otpControllers) {
-      controller.dispose();
-    }
+    _otpInputController.removeListener(_handleOtpInputChange);
+    _otpInputController.dispose();
+    _otpFocusNode.dispose();
     super.dispose();
   }
 
@@ -269,90 +282,160 @@ class _VerificationPageState extends State<VerificationPage> {
         ),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            children: [
-              const SizedBox(height: 30),
-              Image.asset(
-                "assets/1.png",
-                height: 180,
-                fit: BoxFit.contain,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final bool isTablet = constraints.maxWidth > 600;
+            final double horizontalPadding = isTablet ? 56 : 24;
+            final double maxContentWidth = isTablet ? 520 : constraints.maxWidth;
+
+            return SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: horizontalPadding,
+                vertical: 24,
               ),
-              const SizedBox(height: 20),
-              Text(
-                _isFirebaseMode
-                    ? "Check your SMS inbox"
-                    : "Verifying your number",
-                style:
-                    const TextStyle(fontSize: 22, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                widget.phoneNumber,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.black54,
-                ),
-              ),
-              const SizedBox(height: 40),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List.generate(6, (index) {
-                  return SizedBox(
-                    width: 40,
-                    child: TextField(
-                      controller: otpControllers[index],
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      maxLength: 1,
-                      decoration: const InputDecoration(
-                        counterText: "",
-                        enabledBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Colors.black54)),
-                        focusedBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: Colors.black)),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxContentWidth),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20),
+                      Image.asset(
+                        "assets/1.png",
+                        height: isTablet ? 200 : 160,
+                        fit: BoxFit.contain,
                       ),
-                    ),
-                  );
-                }),
-              ),
-              const SizedBox(height: 40),
-              InkWell(
-                onTap: _resendCode,
-                child: Text(
-                  _isFirebaseMode ? "Resend SMS" : "Resend demo code",
-                  style: const TextStyle(
-                      fontSize: 17,
-                      color: Colors.blue,
-                      decoration: TextDecoration.underline),
+                      const SizedBox(height: 24),
+                      Text(
+                        _isFirebaseMode
+                            ? "Check your SMS inbox"
+                            : "Verifying your number",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: isTablet ? 24 : 21,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        widget.phoneNumber,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      GestureDetector(
+                        onTap: () => _otpFocusNode.requestFocus(),
+                        child: Column(
+                          children: [
+                            _buildOtpRow(maxContentWidth),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'Tap to enter the 6-digit code',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.black45,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        height: 0,
+                        child: TextField(
+                          controller: _otpInputController,
+                          focusNode: _otpFocusNode,
+                          keyboardType: TextInputType.number,
+                          maxLength: 6,
+                          decoration: const InputDecoration(
+                            counterText: '',
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      TextButton(
+                        onPressed: _resendCode,
+                        child: Text(
+                          _isFirebaseMode ? "Resend SMS" : "Resend demo code",
+                          style: const TextStyle(
+                            fontSize: 16,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xffFF9FA0),
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                          ),
+                          onPressed: _verifyOtp,
+                          child: const Text(
+                            "Continue",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: 180,
-                height: 48,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xffFF9FA0),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25)),
-                  ),
-                  onPressed: _verifyOtp,
-                  child: const Text(
-                    "Continue",
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 50),
-            ],
-          ),
+            );
+          },
         ),
       ),
+    );
+  }
+
+  Widget _buildOtpRow(double contentWidth) {
+    final double spacing = 12;
+    final double availableWidth = contentWidth - spacing * 5;
+    final double fieldWidth = (availableWidth / 6).clamp(44, 64);
+    final text = _otpInputController.text;
+
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: spacing,
+      runSpacing: 12,
+      children: List.generate(6, (index) {
+        final char = index < text.length ? text[index] : '';
+        return SizedBox(
+          width: fieldWidth,
+          child: Container(
+            height: fieldWidth + 8,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xffF5F5F7),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: index == text.length
+                    ? Colors.black87
+                    : Colors.black26,
+                width: index == text.length ? 1.5 : 1,
+              ),
+            ),
+            child: Text(
+              char,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        );
+      }),
     );
   }
 }
