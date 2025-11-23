@@ -25,6 +25,15 @@ dependencies:
   url_launcher: ^6.3.0
   image_picker: ^1.0.7
 
+  # Existing dependencies
+  flutter_sound: ^9.2.13        # For voice recording
+  permission_handler: ^11.1.0   # For microphone & camera permission
+  image_picker: ^1.1.2          # For camera & gallery
+
+  # Added based on your request
+  record: ^5.0.4                # Audio recording plugin
+  path_provider: ^2.1.4         # For storing audio files
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
