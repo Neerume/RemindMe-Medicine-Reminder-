@@ -1,11 +1,6 @@
 import 'package:flutter/material.dart';
-
-// No direct import needed for SignupPage if using named routes
-// import 'signup.dart'; // <--- Can remove this if only using named routes
-// import 'dashboard_screen.dart'; // <--- Can remove this
-
-// Import the routes file to use named routes
-import '../routes.dart'; // Adjust path if routes.dart is not in lib/
+import 'package:shared_preferences/shared_preferences.dart';
+import '../routes.dart'; // Make sure this path is correct
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -18,12 +13,26 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        // Navigate to the signup page using its named route
-        Navigator.of(context).pushReplacementNamed(AppRoutes.signup);
-      }
-    });
+    _startSplash();
+  }
+
+  void _startSplash() async {
+    // Wait for 3 seconds to show splash
+    await Future.delayed(const Duration(seconds: 3));
+
+    if (!mounted) return;
+
+    // Check if user is logged in
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token != null && token.isNotEmpty) {
+      // User logged in, go to dashboard
+      Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
+    } else {
+      // User not logged in, go to phone input/signup
+      Navigator.of(context).pushReplacementNamed(AppRoutes.signup);
+    }
   }
 
   @override
@@ -32,19 +41,14 @@ class _SplashScreenState extends State<SplashScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Image.asset(
-                'assets/1.png',
-                width: 300,
-                height: 380,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  return const Icon(Icons.error, color: Colors.red, size: 100);
-                },
-              ),
-            ],
+          child: Image.asset(
+            'assets/1.png',
+            width: 300,
+            height: 380,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return const Icon(Icons.error, color: Colors.red, size: 100);
+            },
           ),
         ),
       ),
