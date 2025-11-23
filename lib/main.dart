@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'routes.dart';
 
-// Import your screens
-import 'View/signup.dart';
-import 'View/verification.dart';
-import 'View/name.dart';
-import 'View/add_medicine.dart'; // <-- NEWLY ADDED
-
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const MyApp());
 }
 
@@ -16,24 +17,54 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
       title: 'RemindMe',
+      debugShowCheckedModeBanner: false,
 
+      // ---------------------- APP THEME ----------------------
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        primarySwatch: Colors.red,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.red),
         useMaterial3: true,
+        fontFamily: 'Roboto',
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          iconTheme: IconThemeData(color: Colors.black),
+          titleTextStyle: TextStyle(
+            color: Colors.black,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            foregroundColor: Colors.white,
+            backgroundColor: Colors.red,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+            textStyle: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        cardTheme: CardThemeData(
+          elevation: 4,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          margin: const EdgeInsets.symmetric(vertical: 8),
+        ),
       ),
 
-      /// -------------------- STARTUP SCREEN --------------------
-      home: const AddMedicinePage(),
+      // ---------------------- INITIAL ROUTE ----------------------
+      // Using initialRoute instead of home when using named routes extensively
+      initialRoute: AppRoutes.splash,
 
-      /// -------------------- APP ROUTES --------------------
-      routes: {
-        "/signup": (context) => const SignupPage(),
-        "/verify": (context) => const VerificationPage(),
-        "/name": (context) => const NamePage(),
-        "/addMedicine": (context) => const AddMedicinePage(), // NEW ROUTE
-      },
+      // ---------------------- ROUTES ----------------------
+      routes: AppRoutes.routes,
     );
   }
 }

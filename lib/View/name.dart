@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+// Import your routes.dart file to use named routes
+import '../routes.dart'; // Adjust this path if routes.dart is not in lib/
+import '../services/user_data_service.dart';
 
 class NamePage extends StatefulWidget {
   const NamePage({super.key});
@@ -9,6 +13,12 @@ class NamePage extends StatefulWidget {
 
 class _NamePageState extends State<NamePage> {
   final TextEditingController nameController = TextEditingController();
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +56,10 @@ class _NamePageState extends State<NamePage> {
 
                 /// ---------------------- NAME INPUT ------------------------
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xffE8E9FF),
                     borderRadius: BorderRadius.circular(10),
@@ -76,8 +89,25 @@ class _NamePageState extends State<NamePage> {
                         borderRadius: BorderRadius.circular(25),
                       ),
                     ),
-                    onPressed: () {
-                      // Submit or navigate next
+                    onPressed: () async {
+                      // Save user data
+                      final user = FirebaseAuth.instance.currentUser;
+                      final userId = user?.uid ?? 'user_${DateTime.now().millisecondsSinceEpoch}';
+                      final username = nameController.text.trim();
+                      final email = user?.email ?? '';
+                      final phone = user?.phoneNumber ?? '';
+                      final navigator = Navigator.of(context);
+
+                      await UserDataService.saveUserData(
+                        email: email,
+                        phone: phone,
+                        username: username.isEmpty ? 'User${userId.substring(0, 6)}' : username,
+                        userId: userId,
+                      );
+
+                      if (!mounted) return;
+
+                      navigator.pushReplacementNamed(AppRoutes.dashboard);
                     },
                     child: const Text(
                       "Done",
@@ -95,7 +125,9 @@ class _NamePageState extends State<NamePage> {
                 /// ---------------------- SKIP BUTTON ------------------------
                 TextButton(
                   onPressed: () {
-                    // Skip action
+                    // *** CHANGE MADE HERE: Navigate to Dashboard after "Skip" ***
+                    Navigator.of(context)
+                        .pushReplacementNamed(AppRoutes.dashboard);
                   },
                   child: const Text(
                     "Skip",
