@@ -4,7 +4,7 @@ import 'View/signup.dart';
 import 'View/verification.dart';
 import 'View/name.dart';
 import 'View/dashboard_screen.dart';
-import 'View/add_medicine_screen.dart';
+import 'View/add_medicine.dart';
 import 'View/view_all_medicine.dart';
 import 'View/caregiver_screen.dart';
 import 'View/profile_screen.dart';
@@ -55,7 +55,7 @@ class AppRoutes {
       return const SignupPage();
     },
     AppRoutes.dashboard: (context) => const DashboardScreen(),
-    AppRoutes.addMedicine: (context) => const AddMedicineScreen(),
+    AppRoutes.addMedicine: (context) => const AddMedicinePage(),
     AppRoutes.viewAll: (context) => const ViewAllMedicinesScreen(),
     AppRoutes.caregiver: (context) => const CaregiverScreen(),
     AppRoutes.profile: (context) => const ProfileScreen(),

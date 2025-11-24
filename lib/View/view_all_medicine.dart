@@ -1,7 +1,24 @@
 import 'package:flutter/material.dart';
+import '../Controller/medicineController.dart';
+import '../Model/medicine.dart';
 
-class ViewAllMedicinesScreen extends StatelessWidget {
+class ViewAllMedicinesScreen extends StatefulWidget {
   const ViewAllMedicinesScreen({super.key});
+
+  @override
+  State<ViewAllMedicinesScreen> createState() => _ViewAllMedicinesScreenState();
+}
+
+class _ViewAllMedicinesScreenState extends State<ViewAllMedicinesScreen> {
+  final MedicineController _controller = MedicineController();
+  late Future<List<Medicine>> _medicinesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    // Call your controller to get all medicines
+    _medicinesFuture = _controller.getAllMedicines();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,74 +28,69 @@ class ViewAllMedicinesScreen extends StatelessWidget {
         title: const Text('All Medicines'),
         backgroundColor: Colors.white,
         elevation: 0,
-        iconTheme: const IconThemeData(
-          color: Colors.black87,
-        ), // Ensure back button is visible
-        titleTextStyle: Theme.of(context).appBarTheme.titleTextStyle,
+        iconTheme: const IconThemeData(color: Colors.black87),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          _buildMedicineListItem(
-            context,
-            'Paracetamol',
-            'Take 1 tablet every 8 hours',
-            'Last taken: 8:00 AM Today',
-            Icons.access_time,
-            Colors.blueAccent,
-          ),
-          _buildMedicineListItem(
-            context,
-            'Multivitamin',
-            'Take 1 capsule every day',
-            'Last taken: 1:00 PM Today',
-            Icons.local_pharmacy_outlined,
-            Colors.orangeAccent,
-          ),
-          _buildMedicineListItem(
-            context,
-            'Amoxicillin',
-            'Take 1 tablet twice a day for 7 days',
-            'Next dose: 7:00 PM Today',
-            Icons.medical_services_outlined,
-            Colors.purpleAccent,
-          ),
-          _buildMedicineListItem(
-            context,
-            'Lisinopril',
-            'Take 1 tablet once daily (morning)',
-            'Next dose: Tomorrow 9:00 AM',
-            Icons.favorite_border,
-            Colors.redAccent,
-          ),
-          _buildMedicineListItem(
-            context,
-            'Ibuprofen',
-            'Take 1-2 tablets as needed for pain',
-            'Last taken: Yesterday',
-            Icons.medication_liquid_sharp,
-            Colors.greenAccent,
-          ),
-          const SizedBox(height: 20),
-          Center(
-            child: Text(
-              'End of your medicine list.',
-              style: TextStyle(color: Colors.grey[600], fontSize: 16),
-            ),
-          ),
-        ],
+      body: FutureBuilder<List<Medicine>>(
+        future: _medicinesFuture, // <-- This is calling getAllMedicines() from your controller
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            // No medicines: show fallback example
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _buildMedicineListItem(
+                  context,
+                  'Example: Paracetamol',
+                  '1 tablet • Everyday',
+                  '08:00 AM',
+                  Icons.medical_services_outlined,
+                  Colors.blueAccent,
+                ),
+                const SizedBox(height: 20),
+                Center(
+                  child: Text(
+                    'No medicines added yet.',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                  ),
+                ),
+              ],
+            );
+          } else {
+            // Medicines exist: show them
+            final medicines = snapshot.data!;
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: medicines.length,
+              itemBuilder: (context, index) {
+                final med = medicines[index];
+                return _buildMedicineListItem(
+                  context,
+                  med.name,
+                  '${med.dose} • ${med.repeat}',
+                  med.time,
+                  Icons.medical_services_outlined,
+                  Colors.blueAccent,
+                );
+              },
+            );
+          }
+        },
       ),
     );
   }
 
   Widget _buildMedicineListItem(
-    BuildContext context,
-    String name,
-    String dosage,
-    String status,
-    IconData icon,
-    Color iconColor,
-  ) {
+      BuildContext context,
+      String name,
+      String dosage,
+      String status,
+      IconData icon,
+      Color iconColor,
+      ) {
     return Card(
       elevation: 3,
       margin: const EdgeInsets.only(bottom: 12),
@@ -125,9 +137,9 @@ class ViewAllMedicinesScreen extends StatelessWidget {
                 size: 24,
               ),
               onPressed: () {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text('Details for $name')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Details for $name')),
+                );
               },
             ),
           ],

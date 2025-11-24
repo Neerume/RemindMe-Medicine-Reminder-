@@ -7,4 +7,12 @@
     static const String getProfile= "$baseUrl/api/auth/profile";
     static const String updateProfile= "$baseUrl/api/auth/update";
 
+    //medicine endpoints
+  static const String addMedicine = "$baseUrl/api/medicine/addMedicine";
+  static const String viewMedicine = "$baseUrl/api/medicine/getMedicine";
+  static const String updateMedicine = "$baseUrl/api/medicine/updateMedicine";
+  static const String deleteMedicine = "$baseUrl/api/medicine/deleteMedicine";
+
+
+
   }
