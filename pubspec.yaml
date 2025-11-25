@@ -29,6 +29,8 @@ dependencies:
   # --- New Features (QR & Sharing) ---
   qr_flutter: ^4.1.0
   url_launcher: ^6.3.1
+  # Added for playing ringtone sounds
+  audioplayers: ^5.2.1
 
 dev_dependencies:
   flutter_test:
@@ -46,3 +48,5 @@ flutter:
     - assets/4.png
     - assets/email.png
     # - assets/icons/
+    - assets/
+    - assets/sounds/
