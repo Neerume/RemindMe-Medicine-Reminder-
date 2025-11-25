@@ -24,7 +24,8 @@ dependencies:
   permission_handler: ^11.1.0   # For microphone & camera permission
   image_picker: ^1.1.2          # For camera & gallery
 
-  # Added based on your request
+  # Added for playing ringtone sounds
+  audioplayers: ^5.2.1
 
 dev_dependencies:
   flutter_test:
@@ -37,3 +38,4 @@ flutter:
   assets:
     - assets/1.png
     - assets/
+    - assets/sounds/
