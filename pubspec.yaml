@@ -1,34 +1,36 @@
-name: remindme
-description: "A new Flutter project."
+name: remind_me
+description: Medicine Reminder App
 publish_to: 'none'
-
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: '>=3.2.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
 
+  # --- Core Flutter Icons ---
   cupertino_icons: ^1.0.8
+
+  # --- The Libraries Your App Uses ---
+  firebase_core: ^3.6.0
+  flutter_local_notifications: ^17.2.3
+  timezone: ^0.9.4
+  shared_preferences: ^2.3.2
+  http: ^1.2.2
+  image_picker: ^1.1.2
+
+  # --- THE FIX IS HERE ---
+  # Version 1.0.8 is too old for your Android setup.
+  # We must use 3.0.1 or higher to support Kotlin 1.9+
+  flutter_timezone: ^3.0.1
+
+  # --- New Features (QR & Sharing) ---
   qr_flutter: ^4.1.0
-  screenshot: ^3.0.0
-  share_plus: ^10.0.0
-  shared_preferences: ^2.2.2
-  path_provider: ^2.1.2
-  intl: ^0.19.0
-  url_launcher: ^6.3.0
-  image_picker: ^1.0.7
-
-  # Existing dependencies
-  flutter_sound: ^9.2.13        # For voice recording
-  permission_handler: ^11.1.0   # For microphone & camera permission
-  image_picker: ^1.1.2          # For camera & gallery
-
-  # Added based on your request
-  record: ^5.0.4                # Audio recording plugin
-  path_provider: ^2.1.4         # For storing audio files
+  url_launcher: ^6.3.1
+  # Added for playing ringtone sounds
+  audioplayers: ^5.2.1
 
 dev_dependencies:
   flutter_test:
@@ -38,6 +40,13 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  # Ensure your assets are registered here
   assets:
     - assets/1.png
+    - assets/2.png
+    - assets/3.png
+    - assets/4.png
+    - assets/email.png
+    # - assets/icons/
     - assets/
+    - assets/sounds/

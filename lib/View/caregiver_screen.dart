@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+// Note: Ensure this import path is correct for your project
 import '../services/user_data_service.dart';
 
 class CaregiverScreen extends StatefulWidget {
@@ -21,10 +22,25 @@ class _CaregiverScreenState extends State<CaregiverScreen>
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
 
+  // -- Image URLs for Real Logos --
+  final Map<String, String> _logoUrls = {
+    'whatsapp':
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/512px-WhatsApp.svg.png',
+    'instagram':
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Instagram_icon.png/600px-Instagram_icon.png',
+    'facebook':
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/2021_Facebook_icon.svg/512px-2021_Facebook_icon.svg.png',
+    'gmail':
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Gmail_icon_%282020%29.svg/512px-Gmail_icon_%282020%29.svg.png',
+    'email':
+        'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Mail_iOS.svg/512px-Mail_iOS.svg.png',
+  };
+
   @override
   void initState() {
     super.initState();
     _loadLinks();
+    // Animation Setup
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -51,13 +67,14 @@ class _CaregiverScreenState extends State<CaregiverScreen>
   }
 
   Future<void> _loadLinks() async {
+    // Assuming this service returns your user data
     final userData = await UserDataService.getUserData();
     userId = userData['userId'] ?? 'default_user';
-    
+
     caregiverLink = 'https://connectcaregiver/1/$userId';
     patientLink = 'https://connectpatient/1/$userId';
 
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   Future<void> _copyLink(String link) async {
@@ -71,14 +88,15 @@ class _CaregiverScreenState extends State<CaregiverScreen>
               Icon(Icons.check_circle, color: Colors.white, size: 22),
               SizedBox(width: 12),
               Text(
-                'Link copied to clipboard!',
+                'Link copied!',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ],
           ),
           backgroundColor: Colors.green.shade600,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           margin: const EdgeInsets.all(20),
           duration: const Duration(seconds: 2),
         ),
@@ -86,46 +104,118 @@ class _CaregiverScreenState extends State<CaregiverScreen>
     }
   }
 
-  Future<void> _shareViaWhatsApp(String link, String type) async {
-    final text = type == 'caregiver'
+  // --- Sharing Logic ---
+
+  String _getShareText(String link, String type) {
+    return type == 'caregiver'
         ? 'Join me as a caregiver on RemindMe! 🏥\n$link'
         : 'I need care on RemindMe! 💊\n$link';
+  }
+
+  String _getShareSubject(String type) {
+    return type == 'caregiver'
+        ? 'Join me on RemindMe'
+        : 'Help me with care on RemindMe';
+  }
+
+  Future<void> _shareViaWhatsApp(String link, String type) async {
+    final text = _getShareText(link, type);
     final uri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
-    await _launchUri(uri, 'Could not open WhatsApp. Please ensure it is installed.');
+    await _launchUri(uri, 'Could not open WhatsApp.');
   }
 
   Future<void> _shareViaInstagram(String link, String type) async {
-    final text = type == 'caregiver'
-        ? 'Join me as a caregiver on RemindMe! 🏥\n$link'
-        : 'I need care on RemindMe! 💊\n$link';
-    final uri = Uri.parse(
-      'https://www.instagram.com/direct/new/?text=${Uri.encodeComponent(text)}',
-    );
-    await _launchUri(uri, 'Unable to open Instagram.');
+    // Instagram doesn't support easy "Share text" deep linking directly to DM like WA.
+    // Standard behavior: Copy text and open Instagram.
+    final text = _getShareText(link, type);
+    await Clipboard.setData(ClipboardData(text: text));
+
+    // Try opening Instagram
+    final uri = Uri.parse('https://instagram.com/');
+    await _launchUri(
+        uri, 'Unable to open Instagram. Text copied to clipboard!');
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Link copied! Paste it in Instagram Direct.')),
+      );
+    }
   }
 
   Future<void> _shareViaFacebook(String link, String type) async {
-    final text = type == 'caregiver'
-        ? 'Join me as a caregiver on RemindMe!'
-        : 'I need care on RemindMe!';
     final uri = Uri.parse(
-      'https://www.facebook.com/sharer/sharer.php?u=${Uri.encodeComponent(link)}&quote=${Uri.encodeComponent(text)}',
+      'https://www.facebook.com/sharer/sharer.php?u=${Uri.encodeComponent(link)}',
     );
     await _launchUri(uri, 'Unable to open Facebook.');
   }
 
+  Future<void> _shareViaEmail(String link, String type,
+      {bool isGmail = false}) async {
+    final subject = _getShareSubject(type);
+    final body = _getShareText(link, type);
+
+    // Encode parameters to handle spaces and special characters
+    final params = {
+      'subject': subject,
+      'body': body,
+    };
+
+    final String query = params.entries
+        .map((e) =>
+            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+        .join('&');
+
+    Uri emailLaunchUri;
+
+    if (isGmail) {
+      // Tries to force open the Gmail App via URL Scheme
+      emailLaunchUri = Uri.parse('googlegmail:///co?$query');
+    } else {
+      // Standard system email
+      emailLaunchUri = Uri.parse('mailto:?$query');
+    }
+
+    try {
+      if (!await launchUrl(emailLaunchUri,
+          mode: LaunchMode.externalApplication)) {
+        // If Gmail scheme fails (app not installed), fall back to standard mailto
+        if (isGmail) {
+          await _shareViaEmail(link, type, isGmail: false);
+        } else {
+          throw 'Could not launch email';
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open ${isGmail ? "Gmail" : "Email app"}'),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _launchUri(Uri uri, String fallbackMessage) async {
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    try {
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw 'Could not launch';
+      }
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(fallbackMessage),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     }
   }
+
+  // --- UI Components ---
 
   Widget _buildPremiumQRCode(String data, double size) {
     if (data.isEmpty) {
@@ -152,13 +242,12 @@ class _CaregiverScreenState extends State<CaregiverScreen>
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xffFF9FA0).withValues(alpha: 0.2),
+            color: const Color(0xffFF9FA0).withOpacity(0.2),
             blurRadius: 30,
             offset: const Offset(0, 12),
-            spreadRadius: 0,
           ),
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: Colors.black.withOpacity(0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -170,10 +259,6 @@ class _CaregiverScreenState extends State<CaregiverScreen>
         size: size,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
-        errorCorrectionLevel: QrErrorCorrectLevel.H,
-        padding: const EdgeInsets.all(12),
-        embeddedImage: null,
-        embeddedImageStyle: null,
       ),
     );
   }
@@ -198,66 +283,44 @@ class _CaregiverScreenState extends State<CaregiverScreen>
             opacity: value,
             child: Container(
               margin: const EdgeInsets.only(bottom: 24),
-              padding: const EdgeInsets.all(28),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    const Color(0xffFF9FA0).withValues(alpha: 0.12),
-                    const Color(0xffE8E9FF).withValues(alpha: 0.18),
+                    const Color(0xffFF9FA0).withOpacity(0.12),
+                    const Color(0xffE8E9FF).withOpacity(0.18),
                     Colors.white,
                   ],
-                  stops: const [0.0, 0.4, 1.0],
                 ),
                 borderRadius: BorderRadius.circular(32),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xffFF9FA0).withValues(alpha: 0.15),
-                    blurRadius: 28,
-                    offset: const Offset(0, 14),
-                    spreadRadius: -2,
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
                 border: Border.all(
-                  color: const Color(0xffFF9FA0).withValues(alpha: 0.25),
+                  color: const Color(0xffFF9FA0).withOpacity(0.25),
                   width: 1.5,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xffFF9FA0).withOpacity(0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  )
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Header with icon
+                  // Section Header
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              const Color(0xffFF9FA0).withValues(alpha: 0.2),
-                              const Color(0xffFF9FA0).withValues(alpha: 0.15),
-                            ],
-                          ),
+                          color: const Color(0xffFF9FA0).withOpacity(0.15),
                           borderRadius: BorderRadius.circular(18),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xffFF9FA0).withValues(alpha: 0.2),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
                         ),
-                        child: Icon(
-                          icon,
-                          color: const Color(0xffFF9FA0),
-                          size: 28,
-                        ),
+                        child: Icon(icon,
+                            color: const Color(0xffFF9FA0), size: 26),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -267,21 +330,19 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                             Text(
                               title,
                               style: const TextStyle(
-                                fontSize: 24,
+                                fontSize: 22,
                                 fontWeight: FontWeight.w700,
                                 color: Colors.black87,
-                                letterSpacing: -0.8,
-                                height: 1.2,
+                                height: 1.1,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               subtitle,
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 13,
                                 color: Colors.grey[600],
                                 fontWeight: FontWeight.w500,
-                                height: 1.3,
                               ),
                             ),
                           ],
@@ -289,191 +350,138 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 32),
-                  // Premium QR Code
-                  Center(
-                    child: _buildPremiumQRCode(
-                      qrData,
-                      220.0,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  // Copy Link Section
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: Duration(milliseconds: 800 + (index * 100)),
-                    curve: Curves.easeOut,
-                    builder: (context, value, child) {
-                      return Transform.scale(
-                        scale: 0.95 + (value * 0.05),
-                        child: Opacity(
-                          opacity: value,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Colors.white,
-                                  const Color(0xffFFF2F2),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: const Color(0xffFF9FA0).withValues(alpha: 0.3),
-                                width: 1.5,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xffFF9FA0).withValues(alpha: 0.1),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
+                  const SizedBox(height: 24),
+                  // QR Code
+                  Center(child: _buildPremiumQRCode(qrData, 200.0)),
+                  const SizedBox(height: 24),
+
+                  // Copy Link Field
+                  InkWell(
+                    onTap: () => _copyLink(link),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                              color: const Color(0xffFF9FA0).withOpacity(0.3)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xffFF9FA0).withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            )
+                          ]),
+                      child: Row(
+                        children: [
+                          Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                  color: Colors.grey[50],
+                                  borderRadius: BorderRadius.circular(8)),
+                              child: const Icon(Icons.link,
+                                  color: Color(0xffFF9FA0), size: 20)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Invite Link",
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey[500],
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  link,
+                                  style: TextStyle(
+                                      color: Colors.grey[800],
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () {
-                                  HapticFeedback.mediumImpact();
-                                  _copyLink(link);
-                                },
-                                borderRadius: BorderRadius.circular(20),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 18,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xffFF9FA0)
-                                              .withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: const Icon(
-                                          Icons.link_rounded,
-                                          color: Color(0xffFF9FA0),
-                                          size: 22,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'Invitation Link',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.grey[600],
-                                                letterSpacing: 0.5,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              link,
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.grey[900],
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            colors: [
-                                              const Color(0xffFF9FA0),
-                                              const Color(0xffFF9FA0).withValues(alpha: 0.8),
-                                            ],
-                                          ),
-                                          borderRadius: BorderRadius.circular(12),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: const Color(0xffFF9FA0)
-                                                  .withValues(alpha: 0.3),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
-                                        ),
-                                        child: const Icon(
-                                          Icons.copy_rounded,
-                                          size: 20,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 32),
-                  // Share via section
-                  Center(
-                    child: Text(
-                      'Share via',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[700],
-                        letterSpacing: 0.8,
+                          Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                  color: const Color(0xffFF9FA0),
+                                  borderRadius: BorderRadius.circular(10)),
+                              child: const Icon(Icons.copy,
+                                  size: 16, color: Colors.white)),
+                        ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+
+                  const SizedBox(height: 28),
+
+                  // Share Section
+                  Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                            height: 1, width: 20, color: Colors.grey[300]),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            'Share via',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ),
+                        Container(
+                            height: 1, width: 20, color: Colors.grey[300]),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Real Logos Grid
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 24,
+                    runSpacing: 20,
                     children: [
-                      _buildModernShareButton(
-                        icon: null,
-                        customIcon: _buildWhatsAppIcon(),
+                      _buildLogoButton(
+                        url: _logoUrls['whatsapp']!,
                         label: 'WhatsApp',
-                        color: const Color(0xFF25D366),
-                        onTap: () {
-                          HapticFeedback.mediumImpact();
-                          _shareViaWhatsApp(link, type);
-                        },
-                        delay: index * 100,
+                        onTap: () => _shareViaWhatsApp(link, type),
+                        delay: 0,
                       ),
-                      const SizedBox(width: 24),
-                      _buildModernShareButton(
-                        icon: Icons.camera_alt_rounded,
-                        customIcon: null,
+                      _buildLogoButton(
+                        url: _logoUrls['instagram']!,
                         label: 'Instagram',
-                        color: const Color(0xFFE4405F),
-                        onTap: () {
-                          HapticFeedback.mediumImpact();
-                          _shareViaInstagram(link, type);
-                        },
-                        delay: index * 100 + 100,
+                        onTap: () => _shareViaInstagram(link, type),
+                        delay: 50,
                       ),
-                      const SizedBox(width: 24),
-                      _buildModernShareButton(
-                        icon: Icons.facebook_rounded,
-                        customIcon: null,
+                      _buildLogoButton(
+                        url: _logoUrls['facebook']!,
                         label: 'Facebook',
-                        color: const Color(0xFF1877F2),
-                        onTap: () {
-                          HapticFeedback.mediumImpact();
-                          _shareViaFacebook(link, type);
-                        },
-                        delay: index * 100 + 200,
+                        onTap: () => _shareViaFacebook(link, type),
+                        delay: 100,
+                      ),
+                      _buildLogoButton(
+                        url: _logoUrls['gmail']!,
+                        label: 'Gmail',
+                        onTap: () => _shareViaEmail(link, type, isGmail: true),
+                        delay: 150,
+                      ),
+                      _buildLogoButton(
+                        url: _logoUrls['email']!,
+                        label: 'Email',
+                        onTap: () => _shareViaEmail(link, type, isGmail: false),
+                        delay: 200,
                       ),
                     ],
                   ),
@@ -486,18 +494,9 @@ class _CaregiverScreenState extends State<CaregiverScreen>
     );
   }
 
-  Widget _buildWhatsAppIcon() {
-    return CustomPaint(
-      size: const Size(30, 30),
-      painter: _WhatsAppIconPainter(),
-    );
-  }
-
-  Widget _buildModernShareButton({
-    required IconData? icon,
-    required Widget? customIcon,
+  Widget _buildLogoButton({
+    required String url,
     required String label,
-    required Color color,
     required VoidCallback onTap,
     required int delay,
   }) {
@@ -508,57 +507,66 @@ class _CaregiverScreenState extends State<CaregiverScreen>
       builder: (context, value, child) {
         return Transform.scale(
           scale: value,
-          child: Column(
-            children: [
-              GestureDetector(
-                onTap: onTap,
-                child: Container(
-                  width: 68,
-                  height: 68,
+          child: GestureDetector(
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              onTap();
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        color,
-                        color.withValues(alpha: 0.85),
-                      ],
-                    ),
+                    color: Colors.white,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: color.withValues(alpha: 0.4),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                        spreadRadius: -2,
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
                       ),
                       BoxShadow(
-                        color: color.withValues(alpha: 0.2),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
+                        color: Colors.grey.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: customIcon != null
-                      ? Center(child: customIcon)
-                      : Icon(
-                          icon,
-                          color: Colors.white,
-                          size: 30,
-                        ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(0),
+                    child: Image.network(
+                      url,
+                      fit: BoxFit.contain,
+                      // Fallback logic if internet fails
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(Icons.share,
+                            color: Colors.grey, size: 24);
+                      },
+                      // Loading logic
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        );
+                      },
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[700],
-                  letterSpacing: 0.3,
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[700],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -572,151 +580,84 @@ class _CaregiverScreenState extends State<CaregiverScreen>
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
         automaticallyImplyLeading: false,
         title: Row(
           children: [
+            // Use local asset for your main app logo if available
             Image.asset(
               'assets/1.png',
-              width: 40,
-              height: 50,
+              width: 36,
+              height: 36,
               fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                return const Icon(Icons.error, color: Colors.red, size: 24);
-              },
+              errorBuilder: (ctx, err, stack) =>
+                  const Icon(Icons.favorite, color: Color(0xffFF9FA0)),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             const Text(
               'RemindMe',
               style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.history_rounded, size: 28),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('View History')),
-              );
-            },
-            color: Colors.grey[700],
+            icon: const Icon(Icons.history_rounded, size: 26),
+            onPressed: () {},
+            color: Colors.grey[800],
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.grey[100],
+              highlightColor: const Color(0xffFF9FA0).withOpacity(0.1),
+            ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 16),
         ],
       ),
       body: FadeTransition(
         opacity: _fadeAnimation,
         child: ScaleTransition(
           scale: _scaleAnimation,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final bool isTablet = constraints.maxWidth > 700;
-              final double horizontalPadding = isTablet ? 48 : 20;
-
-              return SingleChildScrollView(
-                padding: EdgeInsets.symmetric(
-                  horizontal: horizontalPadding,
-                  vertical: 28,
-                ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 680),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildInviteSection(
-                          title: 'Invite Caregiver',
-                          subtitle: 'Share with someone who can help manage your care',
-                          icon: Icons.people_rounded,
-                          qrData: caregiverLink ?? '',
-                          link: caregiverLink ?? 'Loading...',
-                          type: 'caregiver',
-                          index: 0,
-                        ),
-                        _buildInviteSection(
-                          title: 'Invite People to Care',
-                          subtitle: 'Let loved ones join your care journey',
-                          icon: Icons.favorite_rounded,
-                          qrData: patientLink ?? '',
-                          link: patientLink ?? 'Loading...',
-                          type: 'patient',
-                          index: 1,
-                        ),
-                      ],
+          child: LayoutBuilder(builder: (context, constraints) {
+            // Tablet responsiveness check
+            final bool isTablet = constraints.maxWidth > 700;
+            return Center(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: ListView(
+                  padding: EdgeInsets.symmetric(
+                      horizontal: isTablet ? 32 : 24, vertical: 24),
+                  children: [
+                    _buildInviteSection(
+                      title: 'Invite Caregiver',
+                      subtitle:
+                          'Share with someone who can help manage your care',
+                      icon: Icons.health_and_safety_rounded,
+                      qrData: caregiverLink ?? '',
+                      link: caregiverLink ?? 'Loading...',
+                      type: 'caregiver',
+                      index: 0,
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    _buildInviteSection(
+                      title: 'Invite Patient',
+                      subtitle: 'Let loved ones join your care journey',
+                      icon: Icons.volunteer_activism_rounded,
+                      qrData: patientLink ?? '',
+                      link: patientLink ?? 'Loading...',
+                      type: 'patient',
+                      index: 1,
+                    ),
+                    const SizedBox(height: 40),
+                  ],
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          }),
         ),
       ),
     );
   }
-}
-
-class _WhatsAppIconPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Draw WhatsApp logo: Green speech bubble with white phone icon
-    
-    // Green speech bubble background
-    final bubblePaint = Paint()
-      ..color = const Color(0xFF25D366)
-      ..style = PaintingStyle.fill;
-
-    final bubblePath = Path();
-    // Main rounded rectangle (speech bubble body)
-    final cornerRadius = size.width * 0.15;
-    bubblePath.addRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.1, size.height * 0.05, size.width * 0.8, size.height * 0.8),
-        Radius.circular(cornerRadius),
-      ),
-    );
-    
-    // Speech bubble tail (pointing down-left)
-    bubblePath.moveTo(size.width * 0.15, size.height * 0.85);
-    bubblePath.lineTo(size.width * 0.05, size.height * 0.95);
-    bubblePath.lineTo(size.width * 0.15, size.height * 0.9);
-    bubblePath.close();
-    
-    canvas.drawPath(bubblePath, bubblePaint);
-
-    // White phone icon inside the bubble
-    final phonePaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-
-    final phonePath = Path();
-    
-    // Phone receiver body (curved shape)
-    // Top part (earpiece)
-    phonePath.addOval(
-      Rect.fromLTWH(size.width * 0.25, size.height * 0.25, size.width * 0.2, size.height * 0.25),
-    );
-    
-    // Middle connector
-    final connectorRadius = size.width * 0.05;
-    phonePath.addRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.35, size.height * 0.45, size.width * 0.3, size.height * 0.1),
-        Radius.circular(connectorRadius),
-      ),
-    );
-    
-    // Bottom part (mouthpiece)
-    phonePath.addOval(
-      Rect.fromLTWH(size.width * 0.55, size.height * 0.5, size.width * 0.2, size.height * 0.25),
-    );
-
-    canvas.drawPath(phonePath, phonePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

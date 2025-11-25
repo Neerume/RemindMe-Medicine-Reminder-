@@ -1,17 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:screenshot/screenshot.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-
-import '../config/api.dart';
-import '../services/user_data_service.dart'; // For getting JWT token
-import '../services/medicine_history_service.dart';
+import '../Controller/userController.dart';
+import '../Model/user.dart';
+import '../services/user_data_service.dart';
 import '../routes.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -22,127 +15,67 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final ScreenshotController _screenshotController = ScreenshotController();
-  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
 
   bool _isEditing = false;
   bool _isLoading = false;
+
+  User? _user;
   File? _profileImage;
-  String? base64Image; // store image in base64
-  final ImagePicker _imagePicker = ImagePicker();
-  String? backendPhotoBase64; // store backend image
+  String? base64Image;
+  String? backendPhotoBase64;
 
   @override
   void initState() {
     super.initState();
-    _fetchProfileFromBackend();
+    _fetchProfile();
   }
 
   /// ---------------------- FETCH PROFILE ----------------------
-  Future<void> _fetchProfileFromBackend() async {
+  Future<void> _fetchProfile() async {
     setState(() => _isLoading = true);
 
-    try {
-      final token = await UserDataService.getToken();
-      final response = await http.get(
-        Uri.parse(ApiConfig.getProfile),
-        headers: {
-          "Authorization": "Bearer $token",
-          "Content-Type": "application/json"
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        _usernameController.text = data['name'] ?? '';
-        _phoneController.text = data['phoneNumber'] ?? '';
-
-        setState(() {
-          _profileImage = null; // reset picked image
-          backendPhotoBase64 = (data['photo'] != null && data['photo'].isNotEmpty) ? data['photo'] : null;
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to load profile')),
-        );
-      }
-    } catch (e) {
+    _user = await UserController().fetchProfile();
+    if (_user != null) {
+      _usernameController.text = _user!.name;
+      _phoneController.text = _user!.phoneNumber;
+      backendPhotoBase64 = _user!.photo;
+      setState(() => _profileImage = null); // reset picked image
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error fetching profile: $e')),
+        const SnackBar(content: Text('Failed to load profile')),
       );
-    } finally {
-      setState(() => _isLoading = false);
     }
+
+    setState(() => _isLoading = false);
   }
 
   /// ---------------------- UPDATE PROFILE ----------------------
   Future<void> _saveProfile() async {
-    setState(() => _isLoading = true);
+    if (_user != null) {
+      _user!.name = _usernameController.text.trim();
+      _user!.phoneNumber = _phoneController.text.trim();
+      _user!.photo = base64Image ?? backendPhotoBase64;
 
-    try {
-      final token = await UserDataService.getToken();
-      final response = await http.put(
-        Uri.parse(ApiConfig.updateProfile),
-        headers: {
-          "Authorization": "Bearer $token",
-          "Content-Type": "application/json",
-        },
-        body: jsonEncode({
-          "name": _usernameController.text.trim(),
-          "photo": base64Image ?? backendPhotoBase64, // send new image if picked
-        }),
-      );
+      setState(() => _isLoading = true);
 
-      if (response.statusCode == 200) {
+      final success = await UserController().updateProfile(_user!);
+
+      setState(() => _isLoading = false);
+
+      if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated!')),
         );
         setState(() => _isEditing = false);
-        _fetchProfileFromBackend(); // refresh profile
+        _fetchProfile();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to update profile')),
         );
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating profile: $e')),
-      );
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  /// ---------------------- LOGOUT ----------------------
-  Future<void> _logout() async {
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
-          content: const Text('Do you want to logout?', style: TextStyle(fontSize: 16)),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldLogout == true) {
-      await UserDataService.clearToken();
-      if (!mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.signup, (route) => false);
     }
   }
 
@@ -155,15 +88,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
         maxHeight: 512,
         imageQuality: 85,
       );
+
       if (image != null) {
         final bytes = await File(image.path).readAsBytes();
         base64Image = base64Encode(bytes);
+
         setState(() => _profileImage = File(image.path));
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error picking image: $e')),
       );
+    }
+  }
+
+  /// ---------------------- LOGOUT ----------------------
+  Future<void> _logout() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
+        content: const Text('Do you want to logout?', style: TextStyle(fontSize: 16)),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout == true) {
+      await UserDataService.clearToken();
+      if (!mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.signup, (route) => false);
     }
   }
 
