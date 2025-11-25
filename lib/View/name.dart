@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:remindme/config/api.dart';
+// ✅ FIXED: Changed 'remindme' to 'remind_me' to match your pubspec.yaml
+import 'package:remind_me/config/api.dart';
 import '../routes.dart';
 
 class NamePage extends StatefulWidget {
-  final String phoneNumber; // Pass phone number from OTP screen
+  final String phoneNumber;
   const NamePage({super.key, required this.phoneNumber});
 
   @override
@@ -149,9 +150,9 @@ class _NamePageState extends State<NamePage> {
                   onPressed: _isLoading
                       ? null
                       : () {
-                    // Skip → call backend with no name to save default
-                    _submitName();
-                  },
+                          // Skip → call backend with no name to save default
+                          _submitName();
+                        },
                   child: const Text(
                     "Skip",
                     style: TextStyle(
