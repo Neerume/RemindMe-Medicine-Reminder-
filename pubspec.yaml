@@ -19,9 +19,14 @@ dependencies:
   permission_handler: ^11.1.0   # For microphone & camera permission
   image_picker: ^1.1.2          # For camera & gallery
 
+<<<<<<< HEAD
   # Added based on your request
   record: ^5.0.4                # Audio recording plugin
   path_provider: ^2.1.4         # For storing audio files
+=======
+  # Added for playing ringtone sounds
+  audioplayers: ^5.2.1
+>>>>>>> e824206 (Edites ringtone opiton with sounds andadded text fields)
 
 dev_dependencies:
   flutter_test:
@@ -34,3 +39,4 @@ flutter:
 
   assets:
     - assets/
+    - assets/sounds/
