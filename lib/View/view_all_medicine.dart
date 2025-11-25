@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../Controller/medicineController.dart';
 import '../Model/medicine.dart';
@@ -10,139 +11,186 @@ class ViewAllMedicinesScreen extends StatefulWidget {
 }
 
 class _ViewAllMedicinesScreenState extends State<ViewAllMedicinesScreen> {
-  final MedicineController _controller = MedicineController();
+  final MedicineController _medicineController = MedicineController();
   late Future<List<Medicine>> _medicinesFuture;
 
   @override
   void initState() {
     super.initState();
-    // Call your controller to get all medicines
-    _medicinesFuture = _controller.getAllMedicines();
+    _refreshMedicines();
+  }
+
+  void _refreshMedicines() {
+    setState(() {
+      _medicinesFuture = _medicineController.getAllMedicines();
+    });
+  }
+
+  Future<void> _deleteMedicine(String id, String name) async {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Delete $name?",
+            style: const TextStyle(color: Color(0xFFC2185B))),
+        content: const Text("This cannot be undone. Are you sure?"),
+        backgroundColor: const Color(0xFFFFF8FB),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF48FB1)),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              bool success = await _medicineController.deleteMedicine(id);
+              if (success && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Deleted successfully")));
+                _refreshMedicines();
+              }
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      extendBodyBehindAppBar: false,
       appBar: AppBar(
-        title: const Text('All Medicines'),
-        backgroundColor: Colors.white,
+        title: const Text("My Medicine Box",
+            style: TextStyle(
+                color: Color(0xFF37474F), fontWeight: FontWeight.bold)),
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black87),
+        backgroundColor: const Color(0xFFFFF0F5),
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.black54),
       ),
-      body: FutureBuilder<List<Medicine>>(
-        future: _medicinesFuture, // <-- This is calling getAllMedicines() from your controller
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            // No medicines: show fallback example
-            return ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _buildMedicineListItem(
-                  context,
-                  'Example: Paracetamol',
-                  '1 tablet • Everyday',
-                  '08:00 AM',
-                  Icons.medical_services_outlined,
-                  Colors.blueAccent,
-                ),
-                const SizedBox(height: 20),
-                Center(
-                  child: Text(
-                    'No medicines added yet.',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 16),
-                  ),
-                ),
-              ],
-            );
-          } else {
-            // Medicines exist: show them
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFFFF0F5), Color(0xFFE1F5FE)], // Pink to Blue
+          ),
+        ),
+        child: FutureBuilder<List<Medicine>>(
+          future: _medicinesFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return Center(
+                  child: Text("Box is empty",
+                      style: TextStyle(color: Colors.grey[500], fontSize: 18)));
+            }
+
             final medicines = snapshot.data!;
             return ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: medicines.length,
               itemBuilder: (context, index) {
                 final med = medicines[index];
-                return _buildMedicineListItem(
-                  context,
-                  med.name,
-                  '${med.dose} • ${med.repeat}',
-                  med.time,
-                  Icons.medical_services_outlined,
-                  Colors.blueAccent,
+
+                // Animation: Slide Up + Fade
+                return TweenAnimationBuilder(
+                  duration: Duration(milliseconds: 400 + (index * 50)),
+                  tween: Tween<double>(begin: 0, end: 1),
+                  builder: (context, double val, child) {
+                    return Opacity(
+                      opacity: val,
+                      child: Transform.translate(
+                          offset: Offset(0, 30 * (1 - val)), child: child),
+                    );
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.blueGrey.withOpacity(0.1),
+                            blurRadius: 6,
+                            offset: const Offset(0, 3))
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        // Left Image Section
+                        ClipRRect(
+                          borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(15),
+                              bottomLeft: Radius.circular(15)),
+                          child: Container(
+                            width: 100,
+                            height: 100,
+                            color: Colors.grey[100],
+                            child: (med.photo != null && med.photo!.isNotEmpty)
+                                ? Image.file(File(med.photo!),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (c, e, s) => const Icon(
+                                        Icons.medication,
+                                        color: Colors.pinkAccent))
+                                : const Icon(Icons.medication,
+                                    color: Colors.blueAccent, size: 40),
+                          ),
+                        ),
+                        // Content
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                        child: Text(med.name,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16))),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline,
+                                          color: Colors.redAccent, size: 22),
+                                      onPressed: () =>
+                                          _deleteMedicine(med.id, med.name),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                    )
+                                  ],
+                                ),
+                                const SizedBox(height: 5),
+                                Text("${med.time} • ${med.repeat}",
+                                    style: const TextStyle(
+                                        color: Colors.blueGrey,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 5),
+                                Text(med.instruction,
+                                    style: const TextStyle(
+                                        color: Colors.grey, fontSize: 13),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 );
               },
             );
-          }
-        },
-      ),
-    );
-  }
-
-  Widget _buildMedicineListItem(
-      BuildContext context,
-      String name,
-      String dosage,
-      String status,
-      IconData icon,
-      Color iconColor,
-      ) {
-    return Card(
-      elevation: 3,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            Icon(icon, color: iconColor, size: 30),
-            const SizedBox(width: 15),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    dosage,
-                    style: TextStyle(fontSize: 15, color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    status,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[500],
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              icon: const Icon(
-                Icons.info_outline,
-                color: Colors.blueGrey,
-                size: 24,
-              ),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Details for $name')),
-                );
-              },
-            ),
-          ],
+          },
         ),
       ),
     );
