@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'routes.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const MyApp());
 }
 
@@ -11,6 +16,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // MaterialApp provides the MediaQuery that ScaffoldMessenger needs
     return MaterialApp(
       title: 'RemindMe',
       debugShowCheckedModeBanner: false,
@@ -55,7 +61,6 @@ class MyApp extends StatelessWidget {
       ),
 
       // ---------------------- INITIAL ROUTE ----------------------
-      // Using initialRoute instead of home when using named routes extensively
       initialRoute: AppRoutes.splash,
 
       // ---------------------- ROUTES ----------------------

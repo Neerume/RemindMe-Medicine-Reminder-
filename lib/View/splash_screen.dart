@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../routes.dart';
+
+// No direct import needed for SignupPage if using named routes
+// import 'signup.dart'; // <--- Can remove this if only using named routes
+// import 'dashboard_screen.dart'; // <--- Can remove this
+
+// Import the routes file to use named routes
+import '../routes.dart'; // Adjust path if routes.dart is not in lib/
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -13,23 +18,12 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _startSplash();
-  }
-
-  void _startSplash() async {
-    await Future.delayed(const Duration(seconds: 3));
-
-    if (!mounted) return;
-
-    final prefs = await SharedPreferences.getInstance();
-
-    final token = prefs.getString('user_token');
-
-    if (token != null && token.isNotEmpty) {
-      Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
-    } else {
-      Navigator.of(context).pushReplacementNamed(AppRoutes.signup);
-    }
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        // Navigate to the signup page using its named route
+        Navigator.of(context).pushReplacementNamed(AppRoutes.signup);
+      }
+    });
   }
 
   @override
@@ -38,11 +32,19 @@ class _SplashScreenState extends State<SplashScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Center(
-          child: Image.asset(
-            'assets/1.png',
-            width: 300,
-            height: 380,
-            fit: BoxFit.contain,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Image.asset(
+                'assets/1.png',
+                width: 300,
+                height: 380,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(Icons.error, color: Colors.red, size: 100);
+                },
+              ),
+            ],
           ),
         ),
       ),

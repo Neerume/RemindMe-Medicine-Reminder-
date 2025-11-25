@@ -1,3 +1,4 @@
+// caregiver_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -16,15 +17,31 @@ class _CaregiverScreenState extends State<CaregiverScreen>
   String? caregiverLink;
   String? patientLink;
   String? userId;
+  final TextEditingController _caregiverEmailController =
+      TextEditingController();
+  final TextEditingController _patientEmailController = TextEditingController();
+  final RegExp _emailRegex = RegExp(r'^[\w\.\-]+@[\w\.-]+\.\w+$');
   late AnimationController _fadeController;
   late AnimationController _scaleController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
 
+  // Official Logo URLs
+  final String _whatsappUrl =
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/512px-WhatsApp.svg.png";
+  final String _instagramUrl =
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Instagram_icon.png/600px-Instagram_icon.png";
+  final String _facebookUrl =
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Facebook_Logo_%282019%29.png/600px-Facebook_Logo_%282019%29.png";
+  final String _gmailUrl =
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Gmail_icon_%282020%29.svg/512px-Gmail_icon_%282020%29.svg.png";
+
   @override
   void initState() {
     super.initState();
     _loadLinks();
+
+    // initialize animations
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -45,6 +62,8 @@ class _CaregiverScreenState extends State<CaregiverScreen>
 
   @override
   void dispose() {
+    _caregiverEmailController.dispose();
+    _patientEmailController.dispose();
     _fadeController.dispose();
     _scaleController.dispose();
     super.dispose();
@@ -53,11 +72,11 @@ class _CaregiverScreenState extends State<CaregiverScreen>
   Future<void> _loadLinks() async {
     final userData = await UserDataService.getUserData();
     userId = userData['userId'] ?? 'default_user';
-    
+
     caregiverLink = 'https://connectcaregiver/1/$userId';
     patientLink = 'https://connectpatient/1/$userId';
 
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   Future<void> _copyLink(String link) async {
@@ -78,7 +97,8 @@ class _CaregiverScreenState extends State<CaregiverScreen>
           ),
           backgroundColor: Colors.green.shade600,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           margin: const EdgeInsets.all(20),
           duration: const Duration(seconds: 2),
         ),
@@ -91,7 +111,8 @@ class _CaregiverScreenState extends State<CaregiverScreen>
         ? 'Join me as a caregiver on RemindMe! 🏥\n$link'
         : 'I need care on RemindMe! 💊\n$link';
     final uri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
-    await _launchUri(uri, 'Could not open WhatsApp. Please ensure it is installed.');
+    await _launchUri(
+        uri, 'Could not open WhatsApp. Please ensure it is installed.');
   }
 
   Future<void> _shareViaInstagram(String link, String type) async {
@@ -114,6 +135,35 @@ class _CaregiverScreenState extends State<CaregiverScreen>
     await _launchUri(uri, 'Unable to open Facebook.');
   }
 
+  Future<void> _shareViaEmail(String link, String type, String email) async {
+    final trimmed = email.trim();
+    if (trimmed.isEmpty || !_emailRegex.hasMatch(trimmed)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Please enter a valid email address first.')),
+      );
+      return;
+    }
+
+    final subject = type == 'caregiver'
+        ? 'Join me as a caregiver on RemindMe'
+        : 'Join my RemindMe care circle';
+    final body = type == 'caregiver'
+        ? 'Hi,\n\nPlease help me manage my medicines using RemindMe.\n$link'
+        : 'Hi,\n\nI would love your support on RemindMe.\n$link';
+
+    final uri = Uri(
+      scheme: 'mailto',
+      path: trimmed,
+      queryParameters: {
+        'subject': subject,
+        'body': body,
+      },
+    );
+    await _launchUri(uri, 'Unable to open email app.');
+  }
+
   Future<void> _launchUri(Uri uri, String fallbackMessage) async {
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (!mounted) return;
@@ -121,7 +171,8 @@ class _CaregiverScreenState extends State<CaregiverScreen>
         SnackBar(
           content: Text(fallbackMessage),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     }
@@ -152,13 +203,13 @@ class _CaregiverScreenState extends State<CaregiverScreen>
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xffFF9FA0).withValues(alpha: 0.2),
+            color: const Color(0xffFF9FA0).withOpacity(0.2),
             blurRadius: 30,
             offset: const Offset(0, 12),
             spreadRadius: 0,
           ),
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: Colors.black.withOpacity(0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -186,6 +237,7 @@ class _CaregiverScreenState extends State<CaregiverScreen>
     required String link,
     required String type,
     required int index,
+    required TextEditingController emailController,
   }) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
@@ -204,8 +256,8 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    const Color(0xffFF9FA0).withValues(alpha: 0.12),
-                    const Color(0xffE8E9FF).withValues(alpha: 0.18),
+                    const Color(0xffFF9FA0).withOpacity(0.12),
+                    const Color(0xffE8E9FF).withOpacity(0.18),
                     Colors.white,
                   ],
                   stops: const [0.0, 0.4, 1.0],
@@ -213,26 +265,25 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                 borderRadius: BorderRadius.circular(32),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xffFF9FA0).withValues(alpha: 0.15),
+                    color: const Color(0xffFF9FA0).withOpacity(0.15),
                     blurRadius: 28,
                     offset: const Offset(0, 14),
                     spreadRadius: -2,
                   ),
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
+                    color: Colors.black.withOpacity(0.06),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
                 ],
                 border: Border.all(
-                  color: const Color(0xffFF9FA0).withValues(alpha: 0.25),
+                  color: const Color(0xffFF9FA0).withOpacity(0.25),
                   width: 1.5,
                 ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Header with icon
                   Row(
                     children: [
                       Container(
@@ -240,14 +291,14 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
-                              const Color(0xffFF9FA0).withValues(alpha: 0.2),
-                              const Color(0xffFF9FA0).withValues(alpha: 0.15),
+                              const Color(0xffFF9FA0).withOpacity(0.2),
+                              const Color(0xffFF9FA0).withOpacity(0.15),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(18),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xffFF9FA0).withValues(alpha: 0.2),
+                              color: const Color(0xffFF9FA0).withOpacity(0.2),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             ),
@@ -290,7 +341,6 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                     ],
                   ),
                   const SizedBox(height: 32),
-                  // Premium QR Code
                   Center(
                     child: _buildPremiumQRCode(
                       qrData,
@@ -298,7 +348,6 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                     ),
                   ),
                   const SizedBox(height: 28),
-                  // Copy Link Section
                   TweenAnimationBuilder<double>(
                     tween: Tween(begin: 0.0, end: 1.0),
                     duration: Duration(milliseconds: 800 + (index * 100)),
@@ -320,12 +369,13 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                               ),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: const Color(0xffFF9FA0).withValues(alpha: 0.3),
+                                color: const Color(0xffFF9FA0).withOpacity(0.3),
                                 width: 1.5,
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xffFF9FA0).withValues(alpha: 0.1),
+                                  color:
+                                      const Color(0xffFF9FA0).withOpacity(0.1),
                                   blurRadius: 12,
                                   offset: const Offset(0, 4),
                                 ),
@@ -350,8 +400,9 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                                         padding: const EdgeInsets.all(10),
                                         decoration: BoxDecoration(
                                           color: const Color(0xffFF9FA0)
-                                              .withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(12),
+                                              .withOpacity(0.15),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
                                         ),
                                         child: const Icon(
                                           Icons.link_rounded,
@@ -362,7 +413,8 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                                       const SizedBox(width: 16),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               'Invitation Link',
@@ -394,14 +446,16 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                                           gradient: LinearGradient(
                                             colors: [
                                               const Color(0xffFF9FA0),
-                                              const Color(0xffFF9FA0).withValues(alpha: 0.8),
+                                              const Color(0xffFF9FA0)
+                                                  .withOpacity(0.8),
                                             ],
                                           ),
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
                                           boxShadow: [
                                             BoxShadow(
                                               color: const Color(0xffFF9FA0)
-                                                  .withValues(alpha: 0.3),
+                                                  .withOpacity(0.3),
                                               blurRadius: 8,
                                               offset: const Offset(0, 4),
                                             ),
@@ -424,7 +478,6 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                     },
                   ),
                   const SizedBox(height: 32),
-                  // Share via section
                   Center(
                     child: Text(
                       'Share via',
@@ -437,45 +490,77 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 24,
+                    runSpacing: 18,
                     children: [
                       _buildModernShareButton(
-                        icon: null,
-                        customIcon: _buildWhatsAppIcon(),
+                        imageUrl: _whatsappUrl,
                         label: 'WhatsApp',
-                        color: const Color(0xFF25D366),
                         onTap: () {
                           HapticFeedback.mediumImpact();
                           _shareViaWhatsApp(link, type);
                         },
                         delay: index * 100,
                       ),
-                      const SizedBox(width: 24),
                       _buildModernShareButton(
-                        icon: Icons.camera_alt_rounded,
-                        customIcon: null,
+                        imageUrl: _instagramUrl,
                         label: 'Instagram',
-                        color: const Color(0xFFE4405F),
                         onTap: () {
                           HapticFeedback.mediumImpact();
                           _shareViaInstagram(link, type);
                         },
                         delay: index * 100 + 100,
                       ),
-                      const SizedBox(width: 24),
                       _buildModernShareButton(
-                        icon: Icons.facebook_rounded,
-                        customIcon: null,
+                        imageUrl: _facebookUrl,
                         label: 'Facebook',
-                        color: const Color(0xFF1877F2),
                         onTap: () {
                           HapticFeedback.mediumImpact();
                           _shareViaFacebook(link, type);
                         },
                         delay: index * 100 + 200,
                       ),
+                      _buildModernShareButton(
+                        imageUrl: _gmailUrl,
+                        label: 'Gmail',
+                        onTap: () {
+                          HapticFeedback.mediumImpact();
+                          _shareViaEmail(link, type, emailController.text);
+                        },
+                        delay: index * 100 + 300,
+                      ),
                     ],
+                  ),
+                  const SizedBox(height: 24),
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Invite via email',
+                      hintText: 'name@example.com',
+                      prefixIcon: const Icon(Icons.email_outlined),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.send_rounded),
+                        onPressed: () =>
+                            _shareViaEmail(link, type, emailController.text),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: BorderSide(
+                          color: const Color(0xffFF9FA0).withOpacity(0.4),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: BorderSide(
+                          color: const Color(0xffFF9FA0).withOpacity(0.3),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -486,18 +571,10 @@ class _CaregiverScreenState extends State<CaregiverScreen>
     );
   }
 
-  Widget _buildWhatsAppIcon() {
-    return CustomPaint(
-      size: const Size(30, 30),
-      painter: _WhatsAppIconPainter(),
-    );
-  }
-
+  // Updated button to use Network Images for real logos
   Widget _buildModernShareButton({
-    required IconData? icon,
-    required Widget? customIcon,
+    required String imageUrl,
     required String label,
-    required Color color,
     required VoidCallback onTap,
     required int delay,
   }) {
@@ -513,39 +590,30 @@ class _CaregiverScreenState extends State<CaregiverScreen>
               GestureDetector(
                 onTap: onTap,
                 child: Container(
-                  width: 68,
-                  height: 68,
+                  width: 60,
+                  height: 60,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        color,
-                        color.withValues(alpha: 0.85),
-                      ],
-                    ),
+                    color: Colors.white,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: color.withValues(alpha: 0.4),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 15,
+                        offset: const Offset(0, 8),
                         spreadRadius: -2,
-                      ),
-                      BoxShadow(
-                        color: color.withValues(alpha: 0.2),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
                       ),
                     ],
                   ),
-                  child: customIcon != null
-                      ? Center(child: customIcon)
-                      : Icon(
-                          icon,
-                          color: Colors.white,
-                          size: 30,
-                        ),
+                  // Padded image to ensure it looks good inside the circle
+                  child: Padding(
+                    padding: const EdgeInsets.all(10.0),
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Icon(Icons.broken_image, color: Colors.grey),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
@@ -630,12 +698,14 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                       children: [
                         _buildInviteSection(
                           title: 'Invite Caregiver',
-                          subtitle: 'Share with someone who can help manage your care',
+                          subtitle:
+                              'Share with someone who can help manage your care',
                           icon: Icons.people_rounded,
                           qrData: caregiverLink ?? '',
                           link: caregiverLink ?? 'Loading...',
                           type: 'caregiver',
                           index: 0,
+                          emailController: _caregiverEmailController,
                         ),
                         _buildInviteSection(
                           title: 'Invite People to Care',
@@ -645,6 +715,7 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                           link: patientLink ?? 'Loading...',
                           type: 'patient',
                           index: 1,
+                          emailController: _patientEmailController,
                         ),
                       ],
                     ),
@@ -657,66 +728,4 @@ class _CaregiverScreenState extends State<CaregiverScreen>
       ),
     );
   }
-}
-
-class _WhatsAppIconPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Draw WhatsApp logo: Green speech bubble with white phone icon
-    
-    // Green speech bubble background
-    final bubblePaint = Paint()
-      ..color = const Color(0xFF25D366)
-      ..style = PaintingStyle.fill;
-
-    final bubblePath = Path();
-    // Main rounded rectangle (speech bubble body)
-    final cornerRadius = size.width * 0.15;
-    bubblePath.addRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.1, size.height * 0.05, size.width * 0.8, size.height * 0.8),
-        Radius.circular(cornerRadius),
-      ),
-    );
-    
-    // Speech bubble tail (pointing down-left)
-    bubblePath.moveTo(size.width * 0.15, size.height * 0.85);
-    bubblePath.lineTo(size.width * 0.05, size.height * 0.95);
-    bubblePath.lineTo(size.width * 0.15, size.height * 0.9);
-    bubblePath.close();
-    
-    canvas.drawPath(bubblePath, bubblePaint);
-
-    // White phone icon inside the bubble
-    final phonePaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-
-    final phonePath = Path();
-    
-    // Phone receiver body (curved shape)
-    // Top part (earpiece)
-    phonePath.addOval(
-      Rect.fromLTWH(size.width * 0.25, size.height * 0.25, size.width * 0.2, size.height * 0.25),
-    );
-    
-    // Middle connector
-    final connectorRadius = size.width * 0.05;
-    phonePath.addRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.35, size.height * 0.45, size.width * 0.3, size.height * 0.1),
-        Radius.circular(connectorRadius),
-      ),
-    );
-    
-    // Bottom part (mouthpiece)
-    phonePath.addOval(
-      Rect.fromLTWH(size.width * 0.55, size.height * 0.5, size.width * 0.2, size.height * 0.25),
-    );
-
-    canvas.drawPath(phonePath, phonePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

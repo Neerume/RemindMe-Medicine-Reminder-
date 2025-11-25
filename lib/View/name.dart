@@ -1,12 +1,11 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:remindme/config/api.dart';
-import '../routes.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+// Import your routes.dart file to use named routes
+import '../routes.dart'; // Adjust this path if routes.dart is not in lib/
+import '../services/user_data_service.dart';
 
 class NamePage extends StatefulWidget {
-  final String phoneNumber; // Pass phone number from OTP screen
-  const NamePage({super.key, required this.phoneNumber});
+  const NamePage({super.key});
 
   @override
   State<NamePage> createState() => _NamePageState();
@@ -14,46 +13,6 @@ class NamePage extends StatefulWidget {
 
 class _NamePageState extends State<NamePage> {
   final TextEditingController nameController = TextEditingController();
-  bool _isLoading = false;
-
-  void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
-  Future<void> _submitName() async {
-    final name = nameController.text.trim();
-
-    setState(() => _isLoading = true);
-
-    try {
-      final response = await http.post(
-        Uri.parse(ApiConfig.login),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "phoneNumber": widget.phoneNumber,
-          "name": name.isEmpty ? null : name,
-        }),
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && data['token'] != null) {
-        _showSnack("Welcome ${data['user']['name']}!");
-
-        // Navigate to dashboard
-        if (!mounted) return;
-        Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
-      } else {
-        _showSnack(data['error'] ?? "Something went wrong!");
-      }
-    } catch (e) {
-      _showSnack("Error: $e");
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
 
   @override
   void dispose() {
@@ -130,10 +89,29 @@ class _NamePageState extends State<NamePage> {
                         borderRadius: BorderRadius.circular(25),
                       ),
                     ),
-                    onPressed: _isLoading ? null : _submitName,
-                    child: Text(
-                      _isLoading ? "Submitting..." : "Done",
-                      style: const TextStyle(
+                    onPressed: () async {
+                      // Save user data
+                      final user = FirebaseAuth.instance.currentUser;
+                      final userId = user?.uid ?? 'user_${DateTime.now().millisecondsSinceEpoch}';
+                      final username = nameController.text.trim();
+                      final email = user?.email ?? '';
+                      final phone = user?.phoneNumber ?? '';
+                      final navigator = Navigator.of(context);
+
+                      await UserDataService.saveUserData(
+                        email: email,
+                        phone: phone,
+                        username: username.isEmpty ? 'User${userId.substring(0, 6)}' : username,
+                        userId: userId,
+                      );
+
+                      if (!mounted) return;
+
+                      navigator.pushReplacementNamed(AppRoutes.dashboard);
+                    },
+                    child: const Text(
+                      "Done",
+                      style: TextStyle(
                         fontSize: 19,
                         color: Colors.black,
                         fontWeight: FontWeight.w600,
@@ -146,11 +124,10 @@ class _NamePageState extends State<NamePage> {
 
                 /// ---------------------- SKIP BUTTON ------------------------
                 TextButton(
-                  onPressed: _isLoading
-                      ? null
-                      : () {
-                    // Skip → call backend with no name to save default
-                    _submitName();
+                  onPressed: () {
+                    // *** CHANGE MADE HERE: Navigate to Dashboard after "Skip" ***
+                    Navigator.of(context)
+                        .pushReplacementNamed(AppRoutes.dashboard);
                   },
                   child: const Text(
                     "Skip",
