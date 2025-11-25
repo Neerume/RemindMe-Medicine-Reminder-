@@ -97,6 +97,12 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
   }
 
       setState(() => selectedAlarms.add(time));
+
+  @override
+  Widget build(BuildContext context) {
+    // TODO: implement build
+    throw UnimplementedError();
+  }
     }
   }
 
