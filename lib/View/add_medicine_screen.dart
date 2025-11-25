@@ -1,5 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
+
+import '../services/medicine_repository.dart';
+import '../services/notification_center_service.dart';
 
 class AddMedicineScreen extends StatefulWidget {
   const AddMedicineScreen({super.key});
@@ -9,17 +16,25 @@ class AddMedicineScreen extends StatefulWidget {
 }
 
 class _AddMedicineScreenState extends State<AddMedicineScreen> {
+  final MedicineRepository _repository = MedicineRepository.instance;
+  final ImagePicker _imagePicker = ImagePicker();
   String _selectedRingtone = 'Dhum dhum';
   String _selectedRepeat = 'Everyday';
   String _selectedDose = '1 tablet'; // New state for Dose
   String _selectedPillCount = '20'; // New state for Pill count
   String _selectedInstruction = 'Before meal'; // New state for Instruction
+  String? _selectedImagePath;
+  bool _isSaving = false;
+  DateTime _selectedDate = DateTime.now();
+  int _selectedHourIndex = 8;
+  int _selectedMinuteIndex = 0;
+  int _selectedAmPmIndex = 0;
 
   // Example for Time selection
   final FixedExtentScrollController _hourController =
       FixedExtentScrollController(
-    initialItem: 7,
-  ); // Adjusted to 7 to match image example (8 AM)
+    initialItem: 8,
+  ); // Default to 8 AM
   final FixedExtentScrollController _minuteController =
       FixedExtentScrollController(
     initialItem: 0,
@@ -30,6 +45,33 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
   ); // 0 for AM, 1 for PM
 
   final TextEditingController _medicineNameController = TextEditingController();
+
+  String get _formattedTimeLabel {
+    final hourDisplay = _selectedHourIndex == 0 ? 12 : _selectedHourIndex;
+    final minuteLabel = _selectedMinuteIndex.toString().padLeft(2, '0');
+    final period = _selectedAmPmIndex == 0 ? 'AM' : 'PM';
+    return '${hourDisplay.toString().padLeft(2, '0')}:$minuteLabel $period';
+  }
+
+  DateTime get _scheduledDateTime {
+    final selectedHour = _selectedHourIndex == 0 ? 12 : _selectedHourIndex;
+    final isPm = _selectedAmPmIndex == 1;
+    int hour24 = selectedHour % 12;
+    if (isPm) {
+      hour24 += 12;
+    }
+
+    return DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      hour24,
+      _selectedMinuteIndex,
+    );
+  }
+
+  String get _formattedDateLabel =>
+      DateFormat('EEE, MMM d, yyyy').format(_selectedDate);
 
   @override
   void dispose() {
@@ -178,6 +220,11 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                                   .toString()
                                   .padLeft(2, '0'),
                             ),
+                            (index) {
+                              setState(() {
+                                _selectedHourIndex = index;
+                              });
+                            },
                           ),
                           _buildTimePickerColumn(
                             _minuteController,
@@ -185,16 +232,43 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                               60,
                               (index) => index.toString().padLeft(2, '0'),
                             ),
+                            (index) {
+                              setState(() {
+                                _selectedMinuteIndex = index;
+                              });
+                            },
                           ),
                           _buildTimePickerColumn(
                             _ampmController,
                             ['AM', 'PM'],
+                            (index) {
+                              setState(() {
+                                _selectedAmPmIndex = index;
+                              });
+                            },
                             itemHeight: 35, // Adjust item height for AM/PM
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 25),
+                    _buildOptionRow(
+                      context,
+                      'Date',
+                      _formattedDateLabel,
+                      _selectDate,
+                      icon: Icons.calendar_month,
+                    ),
+
+                    _buildOptionRow(
+                      context,
+                      'Reminder Time',
+                      _formattedTimeLabel,
+                      () {},
+                      icon: Icons.schedule,
+                      showArrow: false,
+                    ),
+                    const SizedBox(height: 10),
 
                     _buildOptionRow(context, 'Ringtone', _selectedRingtone, () {
                       _showStringPicker(
@@ -272,22 +346,7 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                       icon: Icons.numbers,
                     ),
 
-                    _buildOptionRow(
-                      context,
-                      'Add Photo',
-                      '',
-                      () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Add medicine photo')),
-                        );
-                        // TODO: Implement image picking logic here
-                      },
-                      trailingWidget: const Icon(
-                        Icons.camera_alt,
-                        color: Colors.redAccent,
-                      ),
-                      showArrow: false, // Don't show arrow for photo
-                    ),
+                    _buildPhotoPicker(context),
 
                     _buildOptionRow(
                       context,
@@ -319,15 +378,8 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
                       children: [
                         Expanded(
                           child: _AnimatedButton(
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Medicine added!'),
-                                ),
-                              );
-                              Navigator.pop(context); // Go back to dashboard
-                            },
-                            buttonText: 'ADD',
+                            onPressed: _handleAddMedicine,
+                            buttonText: _isSaving ? 'Saving...' : 'ADD',
                             backgroundColor: const Color(0xFFF06292),
                           ),
                         ),
@@ -357,7 +409,8 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
 
   Widget _buildTimePickerColumn(
     FixedExtentScrollController controller,
-    List<String> items, {
+    List<String> items,
+    ValueChanged<int> onSelected, {
     double itemHeight = 40.0,
   }) {
     return SizedBox(
@@ -365,10 +418,7 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
       child: CupertinoPicker(
         scrollController: controller,
         itemExtent: itemHeight,
-        onSelectedItemChanged: (index) {
-          // You can capture the selected time here if needed
-          // For now, it just updates the picker visually
-        },
+        onSelectedItemChanged: onSelected,
         children: items
             .map(
               (item) => Center(
@@ -439,6 +489,77 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
     );
   }
 
+  Widget _buildPhotoPicker(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withValues(alpha: 0.1),
+              blurRadius: 3,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: _selectedImagePath == null
+                  ? Container(
+                      width: 60,
+                      height: 60,
+                      color: Colors.white,
+                      child: const Icon(
+                        Icons.photo,
+                        color: Colors.grey,
+                      ),
+                    )
+                  : Image.file(
+                      File(_selectedImagePath!),
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                    ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Medicine Photo',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    _selectedImagePath == null
+                        ? 'Add a clear photo to help elders identify pills.'
+                        : 'Photo added. Tap change to replace.',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            TextButton.icon(
+              onPressed: _pickMedicineImage,
+              icon: const Icon(Icons.camera_alt_outlined),
+              label: Text(_selectedImagePath == null ? 'Add' : 'Change'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showStringPicker(
     BuildContext context,
     String title,
@@ -504,6 +625,101 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
         );
       },
     );
+  }
+
+  Future<void> _selectDate() async {
+    final now = DateTime.now();
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 2),
+    );
+    if (pickedDate != null) {
+      setState(() {
+        _selectedDate = pickedDate;
+      });
+    }
+  }
+
+  Future<void> _pickMedicineImage() async {
+    final picked = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+    );
+    if (picked == null) {
+      return;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _selectedImagePath = picked.path;
+    });
+  }
+
+  Future<void> _handleAddMedicine() async {
+    if (_isSaving) return;
+
+    final name = _medicineNameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a medicine name.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final generatedId = DateTime.now().millisecondsSinceEpoch.toString();
+      final entry = MedicineEntry(
+        id: generatedId,
+        name: name,
+        dosage: _selectedDose,
+        scheduledDateTime: _scheduledDateTime,
+        repeat: _selectedRepeat,
+        ringtone: _selectedRingtone,
+        pillCount: int.tryParse(_selectedPillCount) ?? 0,
+        instruction: _selectedInstruction,
+        // ✅ FIXED: Check if path is null, use empty string if so
+        imagePath: _selectedImagePath ?? '',
+      );
+
+      await _repository.addMedicine(entry);
+      await NotificationCenterService.addNotification(
+        NotificationEntry(
+          id: 'added-$generatedId',
+          title: '${entry.name} scheduled',
+          message:
+              '${entry.dosage} on ${DateFormat('EEE, MMM d • h:mm a').format(_scheduledDateTime)}',
+          timestamp: DateTime.now(),
+          type: 'info',
+          metadataTag: 'added-$generatedId',
+        ),
+      );
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$name saved successfully.')),
+      );
+      Navigator.pop(context, true);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save medicine. Please retry.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      } else {
+        _isSaving = false;
+      }
+    }
   }
 
   void _showNumberPicker(

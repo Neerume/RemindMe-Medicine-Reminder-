@@ -43,7 +43,8 @@ class MedicineHistoryService {
 
     if (historyJson != null) {
       final List<dynamic> historyList = json.decode(historyJson);
-      history = historyList.map((json) => MedicineRecord.fromJson(json)).toList();
+      history =
+          historyList.map((json) => MedicineRecord.fromJson(json)).toList();
     }
 
     history.add(record);
@@ -63,7 +64,13 @@ class MedicineHistoryService {
     }
 
     final List<dynamic> historyList = json.decode(historyJson);
-    return historyList.map((json) => MedicineRecord.fromJson(json)).toList();
+    List<MedicineRecord> records =
+        historyList.map((json) => MedicineRecord.fromJson(json)).toList();
+
+    // Sort by date descending (newest first)
+    records.sort((a, b) => b.dateTaken.compareTo(a.dateTaken));
+
+    return records;
   }
 
   static Future<List<MedicineRecord>> getMedicineHistoryForPeriod({
@@ -72,11 +79,13 @@ class MedicineHistoryService {
   }) async {
     final allHistory = await getMedicineHistory();
     return allHistory.where((record) {
-      return record.dateTaken.isAfter(startDate.subtract(const Duration(days: 1))) &&
+      return record.dateTaken
+              .isAfter(startDate.subtract(const Duration(days: 1))) &&
           record.dateTaken.isBefore(endDate.add(const Duration(days: 1)));
     }).toList();
   }
 
+  // ✅ Gets records for last 30 days
   static Future<List<MedicineRecord>> getMedicineHistoryForLastMonth() async {
     final now = DateTime.now();
     final oneMonthAgo = now.subtract(const Duration(days: 30));
@@ -88,4 +97,3 @@ class MedicineHistoryService {
     await prefs.remove(_keyHistory);
   }
 }
-

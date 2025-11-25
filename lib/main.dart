@@ -16,6 +16,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // MaterialApp provides the MediaQuery that ScaffoldMessenger needs
     return MaterialApp(
       title: 'RemindMe',
       debugShowCheckedModeBanner: false,
@@ -60,7 +61,6 @@ class MyApp extends StatelessWidget {
       ),
 
       // ---------------------- INITIAL ROUTE ----------------------
-      // Using initialRoute instead of home when using named routes extensively
       initialRoute: AppRoutes.splash,
 
       // ---------------------- ROUTES ----------------------
