@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'verification.dart';
+import 'package:http/http.dart' as http;
+import '../config/api.dart';
+import '../routes.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -8,160 +11,259 @@ class SignupPage extends StatefulWidget {
   State<SignupPage> createState() => _SignupPageState();
 }
 
+class CountryDialCode {
+  const CountryDialCode({
+    required this.name,
+    required this.code,
+  });
+
+  final String name;
+  final String code;
+}
+
 class _SignupPageState extends State<SignupPage> {
   final TextEditingController phoneController = TextEditingController();
+  bool _isLoading = false;
 
-  String selectedCountry = "Nepal";
-  String selectedCode = "+977";
+  final List<CountryDialCode> _countryCodes = const [
+    CountryDialCode(name: 'Nepal', code: '+977'),
+    CountryDialCode(name: 'India', code: '+91'),
+    CountryDialCode(name: 'United States', code: '+1'),
+    CountryDialCode(name: 'United Kingdom', code: '+44'),
+    CountryDialCode(name: 'Australia', code: '+61'),
+    CountryDialCode(name: 'Canada', code: '+1'),
+  ];
+
+  late CountryDialCode _selectedCountry;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCountry = _countryCodes.first;
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _sendOtp() async {
+    final phoneNumber = _selectedCountry.code + phoneController.text.trim();
+
+    if (phoneController.text.trim().isEmpty || phoneController.text.trim().length < 6) {
+      _showSnack("Enter a valid phone number");
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.sendOtp),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"phoneNumber": phoneNumber}),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        final otp = data['otp'];
+        final expiresAt = DateTime.now().add(const Duration(minutes: 2));
+
+        Navigator.of(context).pushReplacementNamed(
+          AppRoutes.verify,
+          arguments: {
+            'phoneNumber': phoneNumber,
+            'otp': otp,
+            'expiresAt': expiresAt.millisecondsSinceEpoch,
+          },
+        );
+      } else {
+        _showSnack(data['message'] ?? "Failed to send OTP");
+        print("Status code: ${response.statusCode}");
+        print("Response body: ${response.body}");
+      }
+    } catch (e) {
+      _showSnack("Error sending OTP: $e");
+    } finally {
+      setState(() => _isLoading = false);
+    }
+
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final bool isTablet = constraints.maxWidth > 650;
+            final double horizontalPadding = isTablet ? 64 : 20;
+            final BoxDecoration background = const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xfffdf2f4), Color(0xfff0f4ff)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            );
 
-                const SizedBox(height: 30),
-
-                /// ---------------------- LOGO ------------------------
-                Center(
-                  child: Image.asset(
-                    "assets/1.png",
-                    height: 180,
-                    fit: BoxFit.contain,
+            return Container(
+              decoration: background,
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: horizontalPadding,
+                    vertical: 32,
                   ),
-                ),
-
-                const SizedBox(height: 20),
-
-                /// ---------------------- TITLE ------------------------
-                const Text(
-                  "Enter Your Phonenumber",
-                  style: TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black,
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                /// -------------- COUNTRY DROPDOWN ---------------
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: InkWell(
-                    onTap: () {},
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          selectedCountry,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            color: Colors.black,
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: IconButton(
+                            onPressed: () => Navigator.of(context).maybePop(),
+                            icon: const Icon(Icons.arrow_back_ios_new),
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        const Icon(Icons.keyboard_arrow_down_rounded,
-                            size: 22, color: Colors.black),
+                        const SizedBox(height: 10),
+                        Center(
+                          child: Image.asset(
+                            "assets/1.png",
+                            height: isTablet ? 200 : 160,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          "Verify your number",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: isTablet ? 26 : 22,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "We'll send an OTP to confirm your phone number.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.black54,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: EdgeInsets.all(isTablet ? 32 : 22),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(28),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.06),
+                                blurRadius: 30,
+                                offset: const Offset(0, 18),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              InputDecorator(
+                                decoration: InputDecoration(
+                                  labelText: "Country / Region",
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  filled: true,
+                                  fillColor: const Color(0xfff7f8ff),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<CountryDialCode>(
+                                    value: _selectedCountry,
+                                    isExpanded: true,
+                                    items: _countryCodes
+                                        .map(
+                                          (country) => DropdownMenuItem(
+                                        value: country,
+                                        child: Text(
+                                          '${country.name} (${country.code})',
+                                          style:
+                                          const TextStyle(fontSize: 16),
+                                        ),
+                                      ),
+                                    )
+                                        .toList(),
+                                    onChanged: (value) {
+                                      if (value == null) return;
+                                      setState(() {
+                                        _selectedCountry = value;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              TextField(
+                                controller: phoneController,
+                                keyboardType: TextInputType.phone,
+                                decoration: InputDecoration(
+                                  labelText: "Phone Number",
+                                  prefixText: _selectedCountry.code,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  filled: true,
+                                  fillColor: const Color(0xfff7f8ff),
+                                ),
+                              ),
+                              const SizedBox(height: 28),
+                              SizedBox(
+                                height: 52,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xff111827),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                  ),
+                                  onPressed: _isLoading ? null : _sendOtp,
+                                  child: Text(
+                                    _isLoading ? "Sending..." : "Send code",
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 26),
+                        TextButton(
+                          onPressed: () {},
+                          child: const Text(
+                            "Need help?",
+                            style: TextStyle(
+                              fontSize: 15,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ),
-
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  height: 1,
-                  color: Colors.black38,
-                ),
-
-                const SizedBox(height: 20),
-
-                /// ---------------- PHONE INPUT FIELD ----------------
-                Row(
-                  children: [
-                    /// Country code box
-                    Container(
-                      padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xffE8E9FF),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        selectedCode,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(width: 10),
-
-                    /// Phone number input
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xffE8E9FF),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: TextField(
-                          controller: phoneController,
-                          keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            hintText: "|",
-                            hintStyle: TextStyle(color: Colors.black26),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 40),
-
-                /// -------------------- VERIFY BUTTON ---------------------
-                SizedBox(
-                  width: 180,
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xffFF9FA0),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const VerificationPage()),
-                      );
-                    },
-                    child: const Text(
-                      "Verify",
-                      style: TextStyle(
-                        fontSize: 20,
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 30),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       ),
     );

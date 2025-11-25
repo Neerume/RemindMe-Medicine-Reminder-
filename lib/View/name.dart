@@ -1,7 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:remindme/config/api.dart';
+import '../routes.dart';
 
 class NamePage extends StatefulWidget {
-  const NamePage({super.key});
+  final String phoneNumber; // Pass phone number from OTP screen
+  const NamePage({super.key, required this.phoneNumber});
 
   @override
   State<NamePage> createState() => _NamePageState();
@@ -9,6 +14,52 @@ class NamePage extends StatefulWidget {
 
 class _NamePageState extends State<NamePage> {
   final TextEditingController nameController = TextEditingController();
+  bool _isLoading = false;
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _submitName() async {
+    final name = nameController.text.trim();
+
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.login),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "phoneNumber": widget.phoneNumber,
+          "name": name.isEmpty ? null : name,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['token'] != null) {
+        _showSnack("Welcome ${data['user']['name']}!");
+
+        // Navigate to dashboard
+        if (!mounted) return;
+        Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
+      } else {
+        _showSnack(data['error'] ?? "Something went wrong!");
+      }
+    } catch (e) {
+      _showSnack("Error: $e");
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +97,10 @@ class _NamePageState extends State<NamePage> {
 
                 /// ---------------------- NAME INPUT ------------------------
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xffE8E9FF),
                     borderRadius: BorderRadius.circular(10),
@@ -76,12 +130,10 @@ class _NamePageState extends State<NamePage> {
                         borderRadius: BorderRadius.circular(25),
                       ),
                     ),
-                    onPressed: () {
-                      // Submit or navigate next
-                    },
-                    child: const Text(
-                      "Done",
-                      style: TextStyle(
+                    onPressed: _isLoading ? null : _submitName,
+                    child: Text(
+                      _isLoading ? "Submitting..." : "Done",
+                      style: const TextStyle(
                         fontSize: 19,
                         color: Colors.black,
                         fontWeight: FontWeight.w600,
@@ -94,8 +146,11 @@ class _NamePageState extends State<NamePage> {
 
                 /// ---------------------- SKIP BUTTON ------------------------
                 TextButton(
-                  onPressed: () {
-                    // Skip action
+                  onPressed: _isLoading
+                      ? null
+                      : () {
+                    // Skip → call backend with no name to save default
+                    _submitName();
                   },
                   child: const Text(
                     "Skip",
