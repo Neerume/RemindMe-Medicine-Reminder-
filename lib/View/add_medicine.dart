@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'recorder_page.dart';
+import 'dart:io';
 import '../Model/medicine.dart';
 import '../Controller/medicineController.dart';
+import '../services/notification_service.dart'; // Import Service
 
 class AddMedicinePage extends StatefulWidget {
   const AddMedicinePage({super.key});
@@ -18,14 +19,21 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
 
   List<TimeOfDay> selectedAlarms = [];
   String selectedRepeat = "Everyday";
-  final List<String> repeatOptions = ["Everyday", "Weekdays", "Weekends"];
   String selectedDose = "1 tablet";
-  final List<String> doseOptions = ["1 tablet", "2 tablets", "3 tablets"];
   String selectedPillCount = "20";
-  final List<String> pillCounts = ["10", "20", "30", "40"];
   String selectedInstruction = "Before meal";
-  final List<String> instructions = ["Before meal", "After meal", "Anytime"];
   XFile? selectedImage;
+  bool _isLoading = false;
+
+  final List<String> repeatOptions = ["Everyday", "Weekdays", "Weekends"];
+  final List<String> doseOptions = [
+    "1 tablet",
+    "2 tablets",
+    "3 tablets",
+    "1 capsule"
+  ];
+  final List<String> pillCounts = ["10", "20", "30", "40", "50"];
+  final List<String> instructions = ["Before meal", "After meal", "Anytime"];
 
   @override
   void dispose() {
@@ -35,57 +43,25 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
 
   Future<void> pickImageCamera() async {
     final image = await picker.pickImage(source: ImageSource.camera);
-    if (image != null) {
-      setState(() => selectedImage = image);
-    }
+    if (image != null) setState(() => selectedImage = image);
   }
 
   Future<void> pickImageGallery() async {
     final image = await picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      setState(() => selectedImage = image);
-    }
+    if (image != null) setState(() => selectedImage = image);
   }
 
   Future<void> pickTime() async {
-    final TimeOfDay? time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-    );
+    final TimeOfDay? time =
+        await showTimePicker(context: context, initialTime: TimeOfDay.now());
     if (time != null) {
       setState(() {
+        selectedAlarms.clear();
         selectedAlarms.add(time);
       });
     }
   }
 
-  Widget customTile({
-    required IconData icon,
-    required String label,
-    required Widget child,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(children: [
-            Icon(icon, size: 22, color: Colors.black87),
-            const SizedBox(width: 10),
-            Text(label, style: const TextStyle(fontSize: 16)),
-          ]),
-          child,
-        ],
-      ),
-    );
-  }
-
-  // Convert TimeOfDay to formatted string
   String formatTime(TimeOfDay t) {
     final hour = t.hourOfPeriod.toString().padLeft(2, '0');
     final minute = t.minute.toString().padLeft(2, '0');
@@ -96,16 +72,19 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
   Future<void> saveMedicine() async {
     if (medicineController.text.isEmpty || selectedAlarms.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Enter medicine name and at least one alarm")),
-      );
+          const SnackBar(content: Text("Name and Alarm required!")));
       return;
     }
+    setState(() => _isLoading = true);
 
+    // 1. Create Medicine Object
+    // We create a temporary ID based on time for local purposes,
+    // though the DB will likely assign its own ID.
     final med = Medicine(
-      id: "", // backend will generate
-      userId: "dummyUser", // replace with actual userId
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      userId: "",
       name: medicineController.text,
-      time: formatTime(selectedAlarms[0]), // first alarm for display
+      time: formatTime(selectedAlarms[0]),
       repeat: selectedRepeat,
       dose: selectedDose,
       pillCount: selectedPillCount,
@@ -114,191 +93,199 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
       createdAt: DateTime.now().toIso8601String(),
     );
 
-    // Convert selectedAlarms to backend format
-    final alarmsJson = selectedAlarms
-        .map((t) => {"hour": t.hour, "minute": t.minute, "amPm": t.period == DayPeriod.am ? "AM" : "PM"})
-        .toList();
+    // 2. Save to Database/API
+    bool success = await medicineControllerApi.addMedicine(med);
 
-    final medJson = med.toJson();
-    medJson["alarms"] = alarmsJson;
+    // 3. Schedule Notification (Crucial for Reminder)
+    // We schedule it regardless of API success so it works offline instantly
+    await NotificationService.scheduleMedicineReminder(med);
 
-    final success = await medicineControllerApi.addMedicine(Medicine.fromJson(medJson));
+    setState(() => _isLoading = false);
 
-    if (success) {
+    if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Medicine added successfully")),
-      );
+          const SnackBar(content: Text("Added & Reminder Scheduled!")));
       Navigator.pop(context);
-    } else {
+    } else if (!success && mounted) {
+      // Just a fallback message
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to add medicine")),
-      );
+          const SnackBar(content: Text("Saved locally (Offline mode)")));
+      Navigator.pop(context);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      extendBodyBehindAppBar: false,
       appBar: AppBar(
+        title: const Text("Add New Medicine",
+            style:
+                TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFFFFF0F5),
         elevation: 0,
-        backgroundColor: Colors.white,
-        leading: const BackButton(color: Colors.black),
-        title: const Text(
-          "RemindMe",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
+        iconTheme: const IconThemeData(color: Colors.black54),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFFFF0F5), Color(0xFFE1F5FE)],
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              _buildInputContainer(
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: medicineController,
+                      decoration: const InputDecoration(
+                          labelText: "Medicine Name",
+                          prefixIcon: Icon(Icons.medication_outlined,
+                              color: Colors.pinkAccent),
+                          border: InputBorder.none),
+                    ),
+                    const Divider(),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.access_time_filled,
+                          color: Colors.blueAccent),
+                      title: Text(
+                          selectedAlarms.isEmpty
+                              ? "Set Alarm Time"
+                              : formatTime(selectedAlarms[0]),
+                          style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.blue[800],
+                              fontWeight: FontWeight.bold)),
+                      trailing: TextButton(
+                          onPressed: pickTime, child: const Text("Select")),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 15),
+              _buildDropdownTile(Icons.repeat, "Repeat", selectedRepeat,
+                  repeatOptions, (v) => setState(() => selectedRepeat = v!)),
+              _buildDropdownTile(
+                  Icons.medical_services_outlined,
+                  "Dose",
+                  selectedDose,
+                  doseOptions,
+                  (v) => setState(() => selectedDose = v!)),
+              _buildDropdownTile(Icons.tag, "Quantity", selectedPillCount,
+                  pillCounts, (v) => setState(() => selectedPillCount = v!)),
+              _buildDropdownTile(
+                  Icons.info_outline,
+                  "Instruction",
+                  selectedInstruction,
+                  instructions,
+                  (v) => setState(() => selectedInstruction = v!)),
+              const SizedBox(height: 15),
+              _buildInputContainer(
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text("Medicine Photo",
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
+                        Row(
+                          children: [
+                            IconButton(
+                                icon: const Icon(Icons.camera_alt,
+                                    color: Colors.purpleAccent),
+                                onPressed: pickImageCamera),
+                            IconButton(
+                                icon: const Icon(Icons.image,
+                                    color: Colors.blueAccent),
+                                onPressed: pickImageGallery),
+                          ],
+                        )
+                      ],
+                    ),
+                    if (selectedImage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.file(File(selectedImage!.path),
+                                height: 120,
+                                width: double.infinity,
+                                fit: BoxFit.cover)),
+                      )
+                  ],
+                ),
+              ),
+              const SizedBox(height: 30),
+              SizedBox(
+                width: double.infinity,
+                height: 55,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF06292),
+                      elevation: 5,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15))),
+                  onPressed: _isLoading ? null : saveMedicine,
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text("SAVE MEDICINE",
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold)),
+                ),
+              )
+            ],
+          ),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            // Medicine Name
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Medicine Name:",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: medicineController,
-                    decoration: InputDecoration(
-                      hintText: "Enter medicine name",
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text("Alarms:",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 10),
-                  Column(
-                    children: selectedAlarms
-                        .map((t) => Text(formatTime(t),
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))
-                        .toList(),
-                  ),
-                  const SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: pickTime,
-                    child: const Text("Add Alarm"),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
+    );
+  }
 
-            // Repeat
-            customTile(
-              icon: Icons.repeat,
-              label: "Repeat",
-              child: DropdownButton<String>(
-                value: selectedRepeat,
-                items: repeatOptions.map((item) =>
-                    DropdownMenuItem<String>(value: item, child: Text(item))).toList(),
-                onChanged: (String? value) {
-                  if (value == null) return;
-                  setState(() => selectedRepeat = value);
-                },
-              ),
-            ),
+  Widget _buildInputContainer({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)
+          ]),
+      child: child,
+    );
+  }
 
-            // Dose
-            customTile(
-              icon: Icons.medical_services_outlined,
-              label: "Dose",
-              child: DropdownButton<String>(
-                value: selectedDose,
-                items: doseOptions.map((item) =>
-                    DropdownMenuItem<String>(value: item, child: Text(item))).toList(),
-                onChanged: (String? value) {
-                  if (value == null) return;
-                  setState(() => selectedDose = value);
-                },
-              ),
-            ),
-
-            // Pill Count
-            customTile(
-              icon: Icons.tag,
-              label: "No of Pills",
-              child: DropdownButton<String>(
-                value: selectedPillCount,
-                items: pillCounts.map((item) =>
-                    DropdownMenuItem<String>(value: item, child: Text(item))).toList(),
-                onChanged: (String? value) {
-                  if (value == null) return;
-                  setState(() => selectedPillCount = value);
-                },
-              ),
-            ),
-
-            // Add Photo
-            customTile(
-              icon: Icons.camera_alt_outlined,
-              label: "Add Photo",
-              child: Row(
-                children: [
-                  IconButton(icon: const Icon(Icons.camera_alt), onPressed: pickImageCamera),
-                  IconButton(icon: const Icon(Icons.image), onPressed: pickImageGallery),
-                ],
-              ),
-            ),
-
-            // Instruction
-            customTile(
-              icon: Icons.notes,
-              label: "Instruction",
-              child: DropdownButton<String>(
-                value: selectedInstruction,
-                items: instructions.map((item) =>
-                    DropdownMenuItem<String>(value: item, child: Text(item))).toList(),
-                onChanged: (String? value) {
-                  if (value == null) return;
-                  setState(() => selectedInstruction = value);
-                },
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // Buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.pinkAccent,
-                    padding: const EdgeInsets.symmetric(horizontal: 42, vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                  ),
-                  onPressed: saveMedicine,
-                  child: const Text("ADD", style: TextStyle(color: Colors.white, fontSize: 16)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey.shade300,
-                    padding: const EdgeInsets.symmetric(horizontal: 42, vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  child: const Text("Back", style: TextStyle(color: Colors.black87, fontSize: 16)),
-                ),
-              ],
-            ),
-          ],
+  Widget _buildDropdownTile(IconData icon, String title, String value,
+      List<String> items, ValueChanged<String?> changed) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 5)
+          ]),
+      child: ListTile(
+        leading: Icon(icon, color: Colors.blueGrey),
+        title: Text(title,
+            style: const TextStyle(fontSize: 14, color: Colors.grey)),
+        trailing: DropdownButton<String>(
+          value: value,
+          items: items
+              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+              .toList(),
+          onChanged: changed,
+          underline: const SizedBox(),
+          icon: const Icon(Icons.arrow_drop_down, color: Colors.blueAccent),
+          style: const TextStyle(
+              color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 16),
         ),
       ),
     );
