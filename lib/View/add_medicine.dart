@@ -34,7 +34,6 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
   final List<String> repeatOptions = ["Everyday", "Weekdays", "Weekends"];
   String selectedInstruction = "Before meal";
   final List<String> instructions = ["Before meal", "After meal", "Anytime"];
-
   XFile? selectedImage;
 
   // 🔊 NEW — audio player
@@ -143,12 +142,10 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
       createdAt: DateTime.now().toIso8601String(),
     );
 
+ 
+    // Convert selectedAlarms to backend format
     final alarmsJson = selectedAlarms
-        .map((t) => {
-      "hour": t.hour,
-      "minute": t.minute,
-      "amPm": t.period == DayPeriod.am ? "AM" : "PM"
-    })
+        .map((t) => {"hour": t.hour, "minute": t.minute, "amPm": t.period == DayPeriod.am ? "AM" : "PM"})
         .toList();
 
     final medJson = med.toJson();
@@ -197,8 +194,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text("Medicine Name:",
-                      style:
-                      TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 10),
                   TextField(
                     controller: medicineController,
@@ -250,7 +246,6 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
 
             // 🔔 NEW: Ringtone Selection
@@ -362,10 +357,8 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.pinkAccent,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 42, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30)),
+                    padding: const EdgeInsets.symmetric(horizontal: 42, vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                   ),
                   onPressed: saveMedicine,
                   child: const Text("ADD",
@@ -374,10 +367,8 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.grey.shade300,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 42, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30)),
+                    padding: const EdgeInsets.symmetric(horizontal: 42, vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                   ),
                   onPressed: () => Navigator.pop(context),
                   child: const Text("Back",
