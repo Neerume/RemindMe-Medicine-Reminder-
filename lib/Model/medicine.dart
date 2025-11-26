@@ -2,14 +2,15 @@ class Medicine {
   final String id;
   final String userId;
 
-  String name;               // backend: name
-  String time;               // "07:30 AM"  (converted from alarms[])
-  String repeat;             // Everyday / Weekdays / Weekends
-  String dose;               // 1 tablet / 2 tablets
-  String pillCount;          // convert number to string for now
-  String instruction;        // Before meal / After meal
-  String? photo;             // backend: photo
+  String name; // backend: name
+  String time; // "07:30 AM"  (converted from alarms[])
+  String repeat; // Everyday / Weekdays / Weekends
+  String dose; // 1 tablet / 2 tablets
+  String pillCount; // convert number to string for now
+  String instruction; // Before meal / After meal
+  String? photo; // backend: photo
   String createdAt;
+  String ringtone;
 
   Medicine({
     required this.id,
@@ -22,6 +23,7 @@ class Medicine {
     required this.instruction,
     this.photo,
     required this.createdAt,
+    required this.ringtone,
   });
 
   /// Convert backend JSON to Flutter model
@@ -35,7 +37,8 @@ class Medicine {
       final amPm = alarm['amPm'] ?? "";
 
       formattedTime =
-      "${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $amPm";
+      "${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(
+          2, '0')} $amPm";
     }
 
     return Medicine(
@@ -49,20 +52,30 @@ class Medicine {
       instruction: json['instruction'] ?? "",
       photo: json['photo'],
       createdAt: json['createdAt'] ?? "",
+      ringtone: json['ringtone'] ?? "", // Add this
     );
   }
 
   /// Convert Flutter model to backend JSON
   Map<String, dynamic> toJson() {
-    // Convert "07:30 AM" → hour, minute, amPm
-    final parts = time.split(" ");
-    final hm = parts[0].split(":");
-    final amPm = parts[1];
+    int hour = 0;
+    int minute = 0;
+    String amPm = 'AM';
 
-    final hour = int.tryParse(hm[0]) ?? 0;
-    final minute = int.tryParse(hm[1]) ?? 0;
+    if (time.isNotEmpty) {
+      final parts = time.split(" ");
+      if (parts.length == 2) {
+        final hm = parts[0].split(":");
+        if (hm.length == 2) {
+          hour = int.tryParse(hm[0]) ?? 0;
+          minute = int.tryParse(hm[1]) ?? 0;
+        }
+        amPm = parts[1];
+      }
+    }
 
     return {
+      "userId": userId,
       "name": name,
       "dose": dose,
       "pillCount": int.tryParse(pillCount) ?? 0,
@@ -75,7 +88,8 @@ class Medicine {
           "minute": minute,
           "amPm": amPm,
         }
-      ]
+      ],
+      "ringtone": ringtone,
     };
   }
 }

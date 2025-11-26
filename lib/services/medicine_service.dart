@@ -35,7 +35,6 @@
     Future<bool> addMedicine(Medicine med) async {
       try {
         final token = await UserDataService.getToken();
-
         final response = await http.post(
           Uri.parse(ApiConfig.addMedicine),
           headers: {
@@ -44,14 +43,22 @@
           },
           body: jsonEncode(med.toJson()),
         );
+        print("Response code: ${response.statusCode}");
+        print("Response body: ${response.body}");
+        print("Sending JSON: ${jsonEncode(med.toJson())}");
 
-        return response.statusCode == 201;
+        // Updated: Check for 200 or 201, OR parse the body for "success": true
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final responseData = jsonDecode(response.body);
+          return responseData['success'] == true;  // Extra safety check
+
+        }
+        return false;
       } catch (e) {
         print("Error adding medicine: $e");
         return false;
       }
     }
-
     /// Update medicine
     Future<bool> updateMedicine(String id, Medicine med) async {
       try {
@@ -91,4 +98,26 @@
         return false;
       }
     }
+    /// Fetch a single medicine by ID (from API)
+    Future<Medicine?> getMedicineById(int id) async {
+      try {
+        final token = await UserDataService.getToken();
+        final response = await http.get(
+          Uri.parse("${ApiConfig.viewMedicine}/$id"),
+          headers: {
+            "Authorization": "Bearer $token",
+            "Content-Type": "application/json",
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          return Medicine.fromJson(data['medicine']); // adjust according to your API
+        }
+      } catch (e) {
+        print("Error fetching medicine by ID: $e");
+      }
+      return null;
+    }
+
   }

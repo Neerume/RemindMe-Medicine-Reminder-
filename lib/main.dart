@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
-<<<<<<< HEAD
 import 'package:firebase_core/firebase_core.dart';
-// ✅ Import timezone packages for notifications
 import 'package:timezone/data/latest.dart' as tz;
-
-// ✅ Correct package imports (Fixes the "remindme" error)
-import 'package:remind_me/routes.dart';
-import 'package:remind_me/services/notification_service.dart';
+import 'routes.dart';
+import 'services/notification_service.dart';
+import 'services/app_navigator.dart';
+import 'services/invite_link_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Initialize Firebase
+  // Initialize Firebase
   try {
     await Firebase.initializeApp();
     debugPrint("✅ Firebase Initialized");
@@ -19,11 +17,10 @@ Future<void> main() async {
     debugPrint("⚠️ Firebase Warning: $e");
   }
 
-  // 2. Initialize Timezone Database (Required for Local Notifications)
-  // This must run before NotificationService.init()
+  // Initialize Timezone Database (Required for Notifications)
   tz.initializeTimeZones();
 
-  // 3. Initialize Notification Service
+  // Initialize Notification Service
   try {
     await NotificationService.init();
     debugPrint("✅ Notification Service Initialized");
@@ -31,15 +28,9 @@ Future<void> main() async {
     debugPrint("⚠️ Notification Init Error: $e");
   }
 
-=======
-import 'routes.dart';
-import 'services/app_navigator.dart';
-import 'services/invite_link_service.dart';
-
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Initialize Invite Link Service
   await InviteLinkService.instance.initialize();
->>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
+
   runApp(const MyApp());
 }
 
@@ -48,31 +39,27 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Defines the primary brand color used in your other screens (Pastel Pink/Red)
     const primaryColor = Color(0xffFF9FA0);
 
     return MaterialApp(
       title: 'RemindMe',
       debugShowCheckedModeBanner: false,
-<<<<<<< HEAD
+      navigatorKey: AppNavigator.navigatorKey,
+      initialRoute: AppRoutes.splash,
+      routes: AppRoutes.routes,
 
-      // ---------------------- APP THEME ----------------------
+      // App theme
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'Roboto',
-
-        // Define color scheme based on your specific branding color
         colorScheme: ColorScheme.fromSeed(
           seedColor: primaryColor,
           primary: primaryColor,
           secondary: const Color(0xffE8E9FF),
         ),
-
-        // Standardize App Bar
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
-          surfaceTintColor:
-              Colors.transparent, // Removes auto-tint in Material 3
+          surfaceTintColor: Colors.transparent,
           elevation: 0,
           centerTitle: true,
           iconTheme: IconThemeData(color: Colors.black87),
@@ -82,8 +69,6 @@ class MyApp extends StatelessWidget {
             fontWeight: FontWeight.bold,
           ),
         ),
-
-        // Standardize Buttons
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: primaryColor,
@@ -99,8 +84,6 @@ class MyApp extends StatelessWidget {
             ),
           ),
         ),
-
-        // Standardize Input Fields (TextFormFields)
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: const Color(0xffE8E9FF).withOpacity(0.3),
@@ -117,16 +100,9 @@ class MyApp extends StatelessWidget {
             borderSide: const BorderSide(color: primaryColor, width: 1.5),
           ),
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         ),
       ),
-
-      // ---------------------- ROUTING ----------------------
-=======
-      navigatorKey: AppNavigator.key,
->>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
-      initialRoute: AppRoutes.splash,
-      routes: AppRoutes.routes,
 
       // Error handling for unknown routes
       onUnknownRoute: (settings) {

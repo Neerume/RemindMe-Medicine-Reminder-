@@ -135,13 +135,15 @@ class _VerificationPageState extends State<VerificationPage> {
 
       final data = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && data['token'] != null) {
+      if (response.statusCode == 200 && data['token'] != null && data['user'] != null) {
+        final user = data['user'];
+
         await UserDataService.saveToken(data['token']);
+        await UserDataService.saveUserId(user['_id']);       // user ID from backend
         await UserDataService.saveUserData(
           phone: phoneNumber,
-          username: data['username'] ?? '',
+          username: user['name'] ?? '',                      // username from backend
         );
-        await UserDataService.saveUserId(data['userId']);
 
         _showSnack("Login successful!");
 
@@ -175,6 +177,7 @@ class _VerificationPageState extends State<VerificationPage> {
     }
   }
 
+// -------------------- NAVIGATE BACK TO SIGNUP --------------------
   void _navigateBackToSignup() {
     Navigator.of(context).pushReplacementNamed(AppRoutes.signup);
   }
