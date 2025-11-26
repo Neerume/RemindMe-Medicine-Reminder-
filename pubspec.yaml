@@ -28,9 +28,38 @@ dependencies:
 
   # --- New Features (QR & Sharing) ---
   qr_flutter: ^4.1.0
+<<<<<<< HEAD
   url_launcher: ^6.3.1
   # Added for playing ringtone sounds
   audioplayers: ^5.2.1
+=======
+  screenshot: ^3.0.0
+  share_plus: ^10.0.0
+  shared_preferences: ^2.2.2
+  path_provider: ^2.1.2
+  intl: ^0.19.0
+  url_launcher: ^6.3.0
+<<<<<<< Updated upstream
+  image_picker: ^1.0.7
+=======
+  http: ^1.2.2
+>>>>>>> Stashed changes
+
+  # Existing dependencies
+  flutter_sound: ^9.2.13        # For voice recording
+  permission_handler: ^11.1.0   # For microphone & camera permission
+  image_picker: ^1.1.2          # For camera & gallery
+
+<<<<<<< Updated upstream
+  # Added based on your request
+  record: ^5.0.4                # Audio recording plugin
+  path_provider: ^2.1.4         # For storing audio files
+=======
+  # Added for playing ringtone sounds
+  audioplayers: ^5.2.1
+  app_links: ^3.5.1
+>>>>>>> Stashed changes
+>>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
 
 dev_dependencies:
   flutter_test:

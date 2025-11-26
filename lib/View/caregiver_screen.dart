@@ -1,8 +1,17 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+<<<<<<< HEAD
 // Note: Ensure this import path is correct for your project
+=======
+import '../Model/relationship_connection.dart';
+import '../config/api.dart';
+import '../services/relationship_service.dart';
+>>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
 import '../services/user_data_service.dart';
 
 class CaregiverScreen extends StatefulWidget {
@@ -17,6 +26,10 @@ class _CaregiverScreenState extends State<CaregiverScreen>
   String? caregiverLink;
   String? patientLink;
   String? userId;
+  bool _connectionsLoading = false;
+  String? _connectionError;
+  List<RelationshipConnection> _caregivers = [];
+  List<RelationshipConnection> _patients = [];
   late AnimationController _fadeController;
   late AnimationController _scaleController;
   late Animation<double> _fadeAnimation;
@@ -67,6 +80,7 @@ class _CaregiverScreenState extends State<CaregiverScreen>
   }
 
   Future<void> _loadLinks() async {
+<<<<<<< HEAD
     // Assuming this service returns your user data
     final userData = await UserDataService.getUserData();
     userId = userData['userId'] ?? 'default_user';
@@ -75,6 +89,115 @@ class _CaregiverScreenState extends State<CaregiverScreen>
     patientLink = 'https://connectpatient/1/$userId';
 
     if (mounted) setState(() {});
+=======
+    final fetchedUserId = await _resolveCurrentUserId();
+    final profile = await UserDataService.getUserData();
+    final displayName = profile['username'] ?? '';
+
+    if (fetchedUserId == null || fetchedUserId.isEmpty) {
+      setState(() {
+        caregiverLink = 'Unable to load user ID';
+        patientLink = 'Unable to load user ID';
+        _connectionError = 'Please log in to share invites.';
+      });
+      return;
+    }
+
+    userId = fetchedUserId;
+    caregiverLink = RelationshipService.buildInviteLink(
+      role: 'caregiver',
+      inviterId: userId!,
+      inviterName: displayName,
+    );
+    patientLink = RelationshipService.buildInviteLink(
+      role: 'patient',
+      inviterId: userId!,
+      inviterName: displayName,
+    );
+
+    setState(() {});
+    await _loadConnections();
+  }
+
+  Future<String?> _resolveCurrentUserId() async {
+    final storedId = await UserDataService.getUserId();
+    if (storedId != null && storedId.isNotEmpty) {
+      return storedId;
+    }
+
+    final token = await UserDataService.getToken();
+    if (token == null || token.isEmpty) return null;
+
+    try {
+      final response = await http.get(
+        Uri.parse(ApiConfig.getProfile),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final fetchedId = data['_id'] ?? data['id'];
+        final fetchedName = data['name'];
+
+        if (fetchedName is String && fetchedName.isNotEmpty) {
+          await UserDataService.updateUsername(fetchedName);
+        }
+
+        if (fetchedId is String && fetchedId.isNotEmpty) {
+          await UserDataService.saveUserId(fetchedId);
+          return fetchedId;
+        }
+      }
+    } catch (_) {
+      // ignore and allow UI to handle missing ID
+    }
+
+    return null;
+  }
+
+  Future<void> _loadConnections() async {
+    final currentUserId = userId;
+    if (currentUserId == null || currentUserId.isEmpty) {
+      setState(() {
+        _connectionError = 'Please log in to view caregivers.';
+      });
+      return;
+    }
+
+    setState(() {
+      _connectionsLoading = true;
+      _connectionError = null;
+    });
+
+    try {
+      final caregivers = await RelationshipService.fetchCaregivers(currentUserId);
+      final patients = await RelationshipService.fetchPatients(currentUserId);
+
+      if (!mounted) return;
+      setState(() {
+        _caregivers = caregivers;
+        _patients = patients;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _connectionError = 'Unable to load your network. Pull to refresh.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _connectionsLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleRefresh() async {
+    await _loadConnections();
+>>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
   }
 
   Future<void> _copyLink(String link) async {
@@ -620,6 +743,7 @@ class _CaregiverScreenState extends State<CaregiverScreen>
         opacity: _fadeAnimation,
         child: ScaleTransition(
           scale: _scaleAnimation,
+<<<<<<< HEAD
           child: LayoutBuilder(builder: (context, constraints) {
             // Tablet responsiveness check
             final bool isTablet = constraints.maxWidth > 700;
@@ -639,6 +763,61 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                       link: caregiverLink ?? 'Loading...',
                       type: 'caregiver',
                       index: 0,
+=======
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final bool isTablet = constraints.maxWidth > 700;
+              final double horizontalPadding = isTablet ? 48 : 20;
+
+              return RefreshIndicator(
+                onRefresh: _handleRefresh,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: horizontalPadding,
+                    vertical: 28,
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 680),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildInviteSection(
+                            title: 'Invite Caregiver',
+                            subtitle: 'Share with someone who can help manage your care',
+                            icon: Icons.people_rounded,
+                            qrData: caregiverLink ?? '',
+                            link: caregiverLink ?? 'Loading...',
+                            type: 'caregiver',
+                            index: 0,
+                          ),
+                          _buildInviteSection(
+                            title: 'Invite People to Care',
+                            subtitle: 'Let loved ones join your care journey',
+                            icon: Icons.favorite_rounded,
+                            qrData: patientLink ?? '',
+                            link: patientLink ?? 'Loading...',
+                            type: 'patient',
+                            index: 1,
+                          ),
+                          const SizedBox(height: 32),
+                          Text(
+                            'Your network',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'See who is synced with you as caregivers or patients.',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                          const SizedBox(height: 20),
+                          _buildConnectionsContent(),
+                        ],
+                      ),
+>>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
                     ),
                     const SizedBox(height: 8),
                     _buildInviteSection(
@@ -659,5 +838,203 @@ class _CaregiverScreenState extends State<CaregiverScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildConnectionsContent() {
+    if (_connectionsLoading) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_connectionError != null) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              _connectionError!,
+              style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _connectionsLoading ? null : _loadConnections,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Try again'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        _buildConnectionSection(
+          title: 'Your caregivers',
+          emptyText: 'No caregivers yet. Share your caregiver link to get started.',
+          connections: _caregivers,
+          color: const Color(0xffFFB2B4),
+          icon: Icons.volunteer_activism,
+        ),
+        const SizedBox(height: 16),
+        _buildConnectionSection(
+          title: 'People you care for',
+          emptyText: 'No patients yet. Share your patient link to help others.',
+          connections: _patients,
+          color: const Color(0xffA5E5DD),
+          icon: Icons.health_and_safety,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildConnectionSection({
+    required String title,
+    required String emptyText,
+    required List<RelationshipConnection> connections,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 30,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: Colors.black87),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (connections.isNotEmpty)
+                Text(
+                  '${connections.length}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (connections.isEmpty)
+            Text(
+              emptyText,
+              style: TextStyle(color: Colors.grey[600]),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemBuilder: (context, index) {
+                return _buildConnectionCard(connections[index], color);
+              },
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemCount: connections.length,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConnectionCard(RelationshipConnection connection, Color color) {
+    final avatarImage = _avatarFromBase64(connection.photo);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.6)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 30,
+            backgroundColor: color.withValues(alpha: 0.4),
+            backgroundImage: avatarImage,
+            child: avatarImage == null
+                ? Text(
+                    connection.name.isNotEmpty ? connection.name[0].toUpperCase() : '?',
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  connection.name,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  connection.phoneNumber,
+                  style: const TextStyle(color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  ImageProvider? _avatarFromBase64(String? data) {
+    if (data == null || data.isEmpty) return null;
+    try {
+      final cleaned = data.contains(',') ? data.split(',').last : data;
+      final bytes = base64Decode(cleaned);
+      return MemoryImage(bytes);
+    } catch (_) {
+      return null;
+    }
   }
 }
