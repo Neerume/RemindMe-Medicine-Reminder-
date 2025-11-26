@@ -26,15 +26,21 @@ class NotificationEntry {
 }
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  const DashboardScreen({super.key, this.initialIndex = 0});
+
+  final int initialIndex;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+<<<<<<< HEAD
   // Key to control the drawer
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+=======
+  late int _selectedIndex; // For bottom navigation bar
+>>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
 
   int _selectedIndex = 0;
   Key _homeKey = UniqueKey();
@@ -46,11 +52,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+<<<<<<< HEAD
 
     // 1. Request Notification Permissions & Initialize Service
     _initializeNotifications();
 
     // Initialize screens
+=======
+    _selectedIndex = widget.initialIndex;
+>>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
     _widgetOptions = <Widget>[
       _HomeContent(
         key: _homeKey,

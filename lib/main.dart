@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
 import 'package:firebase_core/firebase_core.dart';
 // ✅ Import timezone packages for notifications
 import 'package:timezone/data/latest.dart' as tz;
@@ -30,6 +31,15 @@ Future<void> main() async {
     debugPrint("⚠️ Notification Init Error: $e");
   }
 
+=======
+import 'routes.dart';
+import 'services/app_navigator.dart';
+import 'services/invite_link_service.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await InviteLinkService.instance.initialize();
+>>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
   runApp(const MyApp());
 }
 
@@ -44,6 +54,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'RemindMe',
       debugShowCheckedModeBanner: false,
+<<<<<<< HEAD
 
       // ---------------------- APP THEME ----------------------
       theme: ThemeData(
@@ -111,6 +122,9 @@ class MyApp extends StatelessWidget {
       ),
 
       // ---------------------- ROUTING ----------------------
+=======
+      navigatorKey: AppNavigator.key,
+>>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
       initialRoute: AppRoutes.splash,
       routes: AppRoutes.routes,
 
