@@ -35,14 +35,9 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-<<<<<<< HEAD
   // Key to control the drawer
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-=======
   late int _selectedIndex; // For bottom navigation bar
->>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
-
-  int _selectedIndex = 0;
   Key _homeKey = UniqueKey();
   late final List<Widget> _widgetOptions;
 
@@ -52,15 +47,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-<<<<<<< HEAD
 
     // 1. Request Notification Permissions & Initialize Service
     _initializeNotifications();
 
     // Initialize screens
-=======
     _selectedIndex = widget.initialIndex;
->>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
     _widgetOptions = <Widget>[
       _HomeContent(
         key: _homeKey,

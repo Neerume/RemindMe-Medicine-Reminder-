@@ -5,14 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-<<<<<<< HEAD
-// Note: Ensure this import path is correct for your project
-=======
 import '../Model/relationship_connection.dart';
 import '../config/api.dart';
 import '../services/relationship_service.dart';
->>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
 import '../services/user_data_service.dart';
+import 'package:share_plus/share_plus.dart';  // Add this
 
 class CaregiverScreen extends StatefulWidget {
   const CaregiverScreen({super.key});
@@ -25,6 +22,8 @@ class _CaregiverScreenState extends State<CaregiverScreen>
     with TickerProviderStateMixin {
   String? caregiverLink;
   String? patientLink;
+  String? caregiverShareLink;
+  String? patientShareLink;
   String? userId;
   bool _connectionsLoading = false;
   String? _connectionError;
@@ -80,16 +79,6 @@ class _CaregiverScreenState extends State<CaregiverScreen>
   }
 
   Future<void> _loadLinks() async {
-<<<<<<< HEAD
-    // Assuming this service returns your user data
-    final userData = await UserDataService.getUserData();
-    userId = userData['userId'] ?? 'default_user';
-
-    caregiverLink = 'https://connectcaregiver/1/$userId';
-    patientLink = 'https://connectpatient/1/$userId';
-
-    if (mounted) setState(() {});
-=======
     final fetchedUserId = await _resolveCurrentUserId();
     final profile = await UserDataService.getUserData();
     final displayName = profile['username'] ?? '';
@@ -104,16 +93,31 @@ class _CaregiverScreenState extends State<CaregiverScreen>
     }
 
     userId = fetchedUserId;
-    caregiverLink = RelationshipService.buildInviteLink(
+
+    // In-app deep link
+    caregiverLink = RelationshipService.buildDeepLink(
       role: 'caregiver',
       inviterId: userId!,
       inviterName: displayName,
     );
-    patientLink = RelationshipService.buildInviteLink(
+    patientLink = RelationshipService.buildDeepLink(
       role: 'patient',
       inviterId: userId!,
       inviterName: displayName,
     );
+
+    caregiverShareLink = RelationshipService.buildDeepLink(
+      role: 'caregiver',
+      inviterId: userId!,
+      inviterName: displayName,
+    );
+
+    patientShareLink = RelationshipService.buildDeepLink(
+      role: 'patient',
+      inviterId: userId!,
+      inviterName: displayName,
+    );
+
 
     setState(() {});
     await _loadConnections();
@@ -197,36 +201,11 @@ class _CaregiverScreenState extends State<CaregiverScreen>
 
   Future<void> _handleRefresh() async {
     await _loadConnections();
->>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
   }
 
-  Future<void> _copyLink(String link) async {
-    await Clipboard.setData(ClipboardData(text: link));
-    if (mounted) {
-      HapticFeedback.lightImpact();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white, size: 22),
-              SizedBox(width: 12),
-              Text(
-                'Link copied!',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-          backgroundColor: Colors.green.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          margin: const EdgeInsets.all(20),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
+  Future<void> _shareLink(String link) async {
+    await Share.share(link);
   }
-
   // --- Sharing Logic ---
 
   String _getShareText(String link, String type) {
@@ -241,32 +220,46 @@ class _CaregiverScreenState extends State<CaregiverScreen>
         : 'Help me with care on RemindMe';
   }
 
+  bool _ensureShareLink(String link) {
+    if (link.isNotEmpty) return true;
+    if (!mounted) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Invite link not ready yet. Please try again.'),
+      ),
+    );
+    return false;
+  }
+
   Future<void> _shareViaWhatsApp(String link, String type) async {
+    if (!_ensureShareLink(link)) return;
     final text = _getShareText(link, type);
     final uri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
     await _launchUri(uri, 'Could not open WhatsApp.');
   }
 
   Future<void> _shareViaInstagram(String link, String type) async {
-    // Instagram doesn't support easy "Share text" deep linking directly to DM like WA.
-    // Standard behavior: Copy text and open Instagram.
+    if (!_ensureShareLink(link)) return;
     final text = _getShareText(link, type);
+
+    // Copy to clipboard (Instagram cannot open deep links)
     await Clipboard.setData(ClipboardData(text: text));
 
-    // Try opening Instagram
+    // Open Instagram app or website
     final uri = Uri.parse('https://instagram.com/');
-    await _launchUri(
-        uri, 'Unable to open Instagram. Text copied to clipboard!');
+    await _launchUri(uri, 'Unable to open Instagram. Text copied to clipboard!');
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Link copied! Paste it in Instagram Direct.')),
+          content: Text('Link copied! Paste it in Instagram Direct.'),
+        ),
       );
     }
   }
 
   Future<void> _shareViaFacebook(String link, String type) async {
+    if (!_ensureShareLink(link)) return;
     final uri = Uri.parse(
       'https://www.facebook.com/sharer/sharer.php?u=${Uri.encodeComponent(link)}',
     );
@@ -275,6 +268,7 @@ class _CaregiverScreenState extends State<CaregiverScreen>
 
   Future<void> _shareViaEmail(String link, String type,
       {bool isGmail = false}) async {
+    if (!_ensureShareLink(link)) return;
     final subject = _getShareSubject(type);
     final body = _getShareText(link, type);
 
@@ -391,7 +385,8 @@ class _CaregiverScreenState extends State<CaregiverScreen>
     required String subtitle,
     required IconData icon,
     required String qrData,
-    required String link,
+    required String displayLink,
+    required String shareLink,
     required String type,
     required int index,
   }) {
@@ -480,9 +475,15 @@ class _CaregiverScreenState extends State<CaregiverScreen>
 
                   // Copy Link Field
                   InkWell(
-                    onTap: () => _copyLink(link),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
+                    onTap: () async {
+                      if (await canLaunchUrl(Uri.parse(displayLink))) {
+                        await launchUrl(Uri.parse(displayLink),
+                            mode: LaunchMode.externalApplication);
+                      } else {
+                        await Share.share(displayLink);
+                      }
+                    },
+                      child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
@@ -520,7 +521,7 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                                   ),
                                 ),
                                 Text(
-                                  link,
+                                  displayLink,
                                   style: TextStyle(
                                       color: Colors.grey[800],
                                       fontWeight: FontWeight.w600,
@@ -579,31 +580,31 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                       _buildLogoButton(
                         url: _logoUrls['whatsapp']!,
                         label: 'WhatsApp',
-                        onTap: () => _shareViaWhatsApp(link, type),
+                        onTap: () => _shareViaWhatsApp(shareLink, type),
                         delay: 0,
                       ),
                       _buildLogoButton(
                         url: _logoUrls['instagram']!,
                         label: 'Instagram',
-                        onTap: () => _shareViaInstagram(link, type),
+                        onTap: () => _shareViaInstagram(shareLink, type),
                         delay: 50,
                       ),
                       _buildLogoButton(
                         url: _logoUrls['facebook']!,
                         label: 'Facebook',
-                        onTap: () => _shareViaFacebook(link, type),
+                        onTap: () => _shareViaFacebook(shareLink, type),
                         delay: 100,
                       ),
                       _buildLogoButton(
                         url: _logoUrls['gmail']!,
                         label: 'Gmail',
-                        onTap: () => _shareViaEmail(link, type, isGmail: true),
+                        onTap: () => _shareViaEmail(shareLink, type, isGmail: true),
                         delay: 150,
                       ),
                       _buildLogoButton(
                         url: _logoUrls['email']!,
                         label: 'Email',
-                        onTap: () => _shareViaEmail(link, type, isGmail: false),
+                        onTap: () => _shareViaEmail(shareLink, type, isGmail: false),
                         delay: 200,
                       ),
                     ],
@@ -743,27 +744,6 @@ class _CaregiverScreenState extends State<CaregiverScreen>
         opacity: _fadeAnimation,
         child: ScaleTransition(
           scale: _scaleAnimation,
-<<<<<<< HEAD
-          child: LayoutBuilder(builder: (context, constraints) {
-            // Tablet responsiveness check
-            final bool isTablet = constraints.maxWidth > 700;
-            return Center(
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 600),
-                child: ListView(
-                  padding: EdgeInsets.symmetric(
-                      horizontal: isTablet ? 32 : 24, vertical: 24),
-                  children: [
-                    _buildInviteSection(
-                      title: 'Invite Caregiver',
-                      subtitle:
-                          'Share with someone who can help manage your care',
-                      icon: Icons.health_and_safety_rounded,
-                      qrData: caregiverLink ?? '',
-                      link: caregiverLink ?? 'Loading...',
-                      type: 'caregiver',
-                      index: 0,
-=======
           child: LayoutBuilder(
             builder: (context, constraints) {
               final bool isTablet = constraints.maxWidth > 700;
@@ -788,7 +768,8 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                             subtitle: 'Share with someone who can help manage your care',
                             icon: Icons.people_rounded,
                             qrData: caregiverLink ?? '',
-                            link: caregiverLink ?? 'Loading...',
+                            displayLink: caregiverLink ?? 'Loading...',
+                            shareLink: caregiverShareLink ?? caregiverLink ?? '',
                             type: 'caregiver',
                             index: 0,
                           ),
@@ -797,7 +778,8 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                             subtitle: 'Let loved ones join your care journey',
                             icon: Icons.favorite_rounded,
                             qrData: patientLink ?? '',
-                            link: patientLink ?? 'Loading...',
+                            displayLink: patientLink ?? 'Loading...',
+                            shareLink: patientShareLink ?? patientLink ?? '',
                             type: 'patient',
                             index: 1,
                           ),
@@ -817,24 +799,12 @@ class _CaregiverScreenState extends State<CaregiverScreen>
                           _buildConnectionsContent(),
                         ],
                       ),
->>>>>>> 9be36d7 (made some changes in the caregiver sync and connection files)
                     ),
-                    const SizedBox(height: 8),
-                    _buildInviteSection(
-                      title: 'Invite Patient',
-                      subtitle: 'Let loved ones join your care journey',
-                      icon: Icons.volunteer_activism_rounded,
-                      qrData: patientLink ?? '',
-                      link: patientLink ?? 'Loading...',
-                      type: 'patient',
-                      index: 1,
-                    ),
-                    const SizedBox(height: 40),
-                  ],
+                  ),
                 ),
-              ),
-            );
-          }),
+              );
+            },
+          ),
         ),
       ),
     );
