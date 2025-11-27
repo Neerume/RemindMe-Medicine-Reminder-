@@ -121,7 +121,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
 
       final med = Medicine(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        userId: "currentUser",
+        userId: "currentUser", // Should be replaced with actual user ID logic
         name: medicineController.text,
         time: primaryTime,
         repeat: selectedRepeat,
@@ -132,13 +132,13 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
             : selectedPillCount,
         instruction: selectedInstruction,
         photo: selectedImage?.path,
-        createdAt: DateTime.now().toIso8601String(),
+        createdAt: DateTime.now().toIso8601String(), ringtone: '',
       );
 
       // Save to DB
       bool success = await medicineControllerApi.addMedicine(med);
 
-      // --- CRITICAL UPDATE HERE ---
+      // Schedule Notifications
       // We pass the 'selectedRingtone' to the service so it knows what sound to play
       await NotificationService.scheduleMedicineReminder(med, selectedRingtone);
 
@@ -158,10 +158,12 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         Navigator.pop(context);
       }
     } catch (e) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
     }
   }
 
@@ -180,7 +182,8 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
-          BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 5)
+          // Use withValues() as withOpacity is deprecated in newer Flutter versions
+          BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 5)
         ],
       ),
       child: ListTile(
@@ -241,7 +244,8 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                   borderRadius: BorderRadius.circular(15),
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.grey.withOpacity(0.1), blurRadius: 10)
+                        color: Colors.grey.withValues(alpha: 0.1),
+                        blurRadius: 10)
                   ],
                 ),
                 child: TextField(
@@ -264,7 +268,8 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                   borderRadius: BorderRadius.circular(15),
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.grey.withOpacity(0.1), blurRadius: 10)
+                        color: Colors.grey.withValues(alpha: 0.1),
+                        blurRadius: 10)
                   ],
                 ),
                 child: Column(
@@ -357,7 +362,8 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                   borderRadius: BorderRadius.circular(15),
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.grey.withOpacity(0.1), blurRadius: 5)
+                        color: Colors.grey.withValues(alpha: 0.1),
+                        blurRadius: 5)
                   ],
                 ),
                 child: TextField(
@@ -381,7 +387,8 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                   borderRadius: BorderRadius.circular(15),
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.grey.withOpacity(0.1), blurRadius: 10)
+                        color: Colors.grey.withValues(alpha: 0.1),
+                        blurRadius: 10)
                   ],
                 ),
                 child: Column(
