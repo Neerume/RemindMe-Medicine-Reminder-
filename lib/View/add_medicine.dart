@@ -55,10 +55,13 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     }
   }
 
-  Future<void> _pickImage(ImageSource source) async {
-    final image = await _picker.pickImage(source: source);
-    if (image != null) {
-      setState(() => _selectedImage = image);
+      setState(() => selectedAlarms.add(time));
+
+  @override
+  Widget build(BuildContext context) {
+    // TODO: implement build
+    throw UnimplementedError();
+  }
     }
   }
 
