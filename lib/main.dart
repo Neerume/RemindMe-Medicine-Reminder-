@@ -3,9 +3,13 @@ import 'package:firebase_core/firebase_core.dart';
 // ✅ Import timezone packages for notifications
 import 'package:timezone/data/latest.dart' as tz;
 
-// ✅ Correct package imports (Fixes the "remindme" error)
+// ✅ Correct package imports
 import 'package:remind_me/routes.dart';
 import 'package:remind_me/services/notification_service.dart';
+import 'View/alarm_screen.dart';
+
+// 1. CREATE GLOBAL NAVIGATOR KEY (Required for Notification Navigation)
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +28,8 @@ Future<void> main() async {
 
   // 3. Initialize Notification Service
   try {
-    await NotificationService.init();
+    // UPDATED: Pass the navigatorKey to the service so it can change screens
+    await NotificationService.init(navigatorKey);
     debugPrint("✅ Notification Service Initialized");
   } catch (e) {
     debugPrint("⚠️ Notification Init Error: $e");
@@ -44,6 +49,9 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'RemindMe',
       debugShowCheckedModeBanner: false,
+
+      // 2. ASSIGN THE NAVIGATOR KEY HERE
+      navigatorKey: navigatorKey,
 
       // ---------------------- APP THEME ----------------------
       theme: ThemeData(
@@ -112,7 +120,12 @@ class MyApp extends StatelessWidget {
 
       // ---------------------- ROUTING ----------------------
       initialRoute: AppRoutes.splash,
-      routes: AppRoutes.routes,
+
+      // UPDATED: We merge your existing routes with the new Alarm route
+      routes: {
+        ...AppRoutes.routes,
+        '/alarm': (context) => const AlarmScreen(), // Ensure this route exists
+      },
 
       // Error handling for unknown routes
       onUnknownRoute: (settings) {

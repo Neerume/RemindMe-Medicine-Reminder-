@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -9,8 +11,10 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  static Future<void> init() async {
-    // 1. Initialize Timezones
+  static GlobalKey<NavigatorState>? _navigatorKey;
+
+  static Future<void> init(GlobalKey<NavigatorState> navKey) async {
+    _navigatorKey = navKey;
     tz.initializeTimeZones();
     try {
       final String timeZoneName = await FlutterTimezone.getLocalTimezone();
@@ -19,12 +23,9 @@ class NotificationService {
       tz.setLocalLocation(tz.UTC);
     }
 
-    // 2. Android Initialization
-    // Ensure 'ic_launcher' exists in android/app/src/main/res/mipmap-*/
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    // 3. iOS Initialization
     const DarwinInitializationSettings iosSettings =
         DarwinInitializationSettings(
       requestAlertPermission: true,
@@ -39,8 +40,13 @@ class NotificationService {
 
     await _notificationsPlugin.initialize(
       settings,
-      onDidReceiveNotificationResponse: (details) {
-        print("Clicked notification payload: ${details.payload}");
+      onDidReceiveNotificationResponse: (NotificationResponse details) {
+        if (details.payload != null && _navigatorKey?.currentState != null) {
+          _navigatorKey!.currentState!.pushNamed(
+            '/alarm',
+            arguments: details.payload,
+          );
+        }
       },
     );
   }
@@ -51,20 +57,8 @@ class NotificationService {
           _notificationsPlugin.resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
 
-      // Request basic notification permission (Android 13+)
       await androidImplementation?.requestNotificationsPermission();
-
-      // Request Exact Alarm permission (Android 12+)
       await androidImplementation?.requestExactAlarmsPermission();
-    } else if (Platform.isIOS) {
-      await _notificationsPlugin
-          .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
-          ?.requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          );
     }
   }
 
@@ -72,74 +66,121 @@ class NotificationService {
     await _notificationsPlugin.cancelAll();
   }
 
-  // --- Main Schedule Logic ---
-  static Future<void> scheduleMedicineReminder(Medicine medicine) async {
-    try {
-      // 1. Parsing Logic for "04:30 PM" (Handles extra spaces)
-      String cleanedTime = medicine.time.replaceAll(RegExp(r'\s+'), ' ').trim();
+  // --- NEW: Helper to show simple confirmation notification ---
+  static Future<void> showConfirmationNotification(
+      String title, String body) async {
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+      'med_confirmation_channel',
+      'Medicine Status',
+      channelDescription: 'Confirmations for taken/skipped meds',
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+    );
 
+    const NotificationDetails details =
+        NotificationDetails(android: androidDetails);
+
+    await _notificationsPlugin.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000, // Unique ID
+      title,
+      body,
+      details,
+    );
+  }
+
+  static Future<void> scheduleMedicineReminder(Medicine medicine,
+      [String? ringtone]) async {
+    try {
+      String cleanedTime = medicine.time.replaceAll(RegExp(r'\s+'), ' ').trim();
       final timeParts = cleanedTime.split(" ");
       final hm = timeParts[0].split(":");
       int hour = int.parse(hm[0]);
       int minute = int.parse(hm[1]);
       final amPm = timeParts[1].toUpperCase();
 
-      // Convert to 24 Hour format
       if (amPm == "PM" && hour != 12) hour += 12;
       if (amPm == "AM" && hour == 12) hour = 0;
 
-      // 2. Unique ID
-      int notificationId = medicine.id.hashCode;
+      String soundFileName = "tone1";
+      if (ringtone != null) {
+        String normalized = ringtone.toLowerCase().trim();
+        if (normalized.contains("tone 1"))
+          soundFileName = "tone1";
+        else if (normalized.contains("tone 2"))
+          soundFileName = "tone2";
+        else if (normalized.contains("tone 3"))
+          soundFileName = "tone3";
+        else if (normalized.contains("tone 4")) soundFileName = "tone4";
+      }
 
-      // 3. Define Notification Details (Pop-up Settings)
-      const AndroidNotificationDetails androidDetails =
-          AndroidNotificationDetails(
-        'med_alert_high_priority', // CHANGED ID: Resets settings to allow pop-ups
-        'Medicine Pop-ups', // Channel Name
-        channelDescription: 'High importance alerts that pop over other apps',
+      StyleInformation? styleInformation;
+      if (medicine.photo != null && medicine.photo!.isNotEmpty) {
+        styleInformation = BigPictureStyleInformation(
+          FilePathAndroidBitmap(medicine.photo!),
+          largeIcon: FilePathAndroidBitmap(medicine.photo!),
+          contentTitle: 'Medicine Time: ${medicine.name}',
+          summaryText: '${medicine.dose} - ${medicine.instruction}',
+        );
+      }
 
-        // --- KEY SETTINGS FOR HEADS-UP NOTIFICATIONS ---
-        importance: Importance.max, // Display on top of screen
-        priority: Priority.high, // High priority
-        fullScreenIntent: true, // Helps wake locked screens
-        ticker: 'Time for your medicine',
-        visibility:
-            NotificationVisibility.public, // Show content on lock screen
-
-        // Sound and Vibration
+      AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'med_alarm_$soundFileName',
+        'Medicine Alarm ($soundFileName)',
+        channelDescription: 'Continuous alarm sound for medicines',
+        importance: Importance.max,
+        priority: Priority.high,
+        fullScreenIntent: true,
+        visibility: NotificationVisibility.public,
         playSound: true,
-        enableVibration: true,
+        sound: RawResourceAndroidNotificationSound(soundFileName),
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+        additionalFlags: Int32List.fromList(<int>[4]),
+        styleInformation: styleInformation,
+        actions: <AndroidNotificationAction>[
+          const AndroidNotificationAction(
+            'mark_taken_id',
+            'Mark as Taken',
+            showsUserInterface: true,
+            cancelNotification: true,
+          ),
+        ],
         category: AndroidNotificationCategory.alarm,
+        autoCancel: true,
       );
 
-      const NotificationDetails details = NotificationDetails(
+      NotificationDetails details = NotificationDetails(
         android: androidDetails,
         iOS: DarwinNotificationDetails(
-          presentAlert: true, // iOS Pop up
+          presentAlert: true,
           presentBanner: true,
           presentSound: true,
+          sound: '$soundFileName.wav',
+          interruptionLevel: InterruptionLevel.timeSensitive,
         ),
       );
 
-      // 4. Calculate schedule
       final scheduledTime = _nextInstanceOfTime(hour, minute);
 
-      // 5. Schedule
+      // --- NEW PAYLOAD FORMAT: Name|Dose|Instruction|PhotoPath ---
+      String payloadData =
+          "${medicine.name}|${medicine.dose}|${medicine.instruction}|${medicine.photo ?? ''}";
+
       await _notificationsPlugin.zonedSchedule(
-        notificationId,
-        'Medicine Time: ${medicine.name}', // Title
-        'Take ${medicine.dose} - ${medicine.instruction}', // Body
+        medicine.id.hashCode,
+        'Medicine Time: ${medicine.name}',
+        'Take ${medicine.dose} - ${medicine.instruction}',
         scheduledTime,
         details,
+        payload: payloadData,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time, // Repeats daily
+        matchDateTimeComponents: DateTimeComponents.time,
       );
-
-      print("SUCCESS: Scheduled POP-UP for ${medicine.name} at $hour:$minute");
     } catch (e) {
-      print("ERROR Scheduling Notification for ${medicine.name}: $e");
+      print("Error scheduling notification: $e");
     }
   }
 

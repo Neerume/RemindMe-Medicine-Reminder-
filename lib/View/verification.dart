@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Added for input formatters
 import 'package:http/http.dart' as http;
 import '../config/api.dart';
 import '../routes.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/user_data_service.dart';
 
@@ -24,8 +24,11 @@ class VerificationPage extends StatefulWidget {
 }
 
 class _VerificationPageState extends State<VerificationPage> {
-  final TextEditingController _otpController = TextEditingController();
-  final FocusNode _otpFocusNode = FocusNode();
+  // We use a list of controllers and focus nodes for the 6 boxes
+  final List<TextEditingController> _controllers =
+      List.generate(6, (_) => TextEditingController());
+  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
+
   bool _isLoading = false;
   bool _isResending = false;
 
@@ -43,7 +46,8 @@ class _VerificationPageState extends State<VerificationPage> {
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   bool get _isOtpExpired => DateTime.now().isAfter(_expiresAt);
@@ -54,11 +58,17 @@ class _VerificationPageState extends State<VerificationPage> {
     _showSnack('Demo OTP for ${widget.phoneNumber}: $_currentOtp');
   }
 
+  // Helper to get the full OTP string from the 6 boxes
+  String _getOtpFromBoxes() {
+    return _controllers.map((e) => e.text).join();
+  }
+
   // -------------------- VERIFY OTP --------------------
   Future<void> _verifyOtp() async {
-    final otpInput = _otpController.text.trim();
+    final otpInput = _getOtpFromBoxes();
+
     if (otpInput.length != 6) {
-      _showSnack("Enter 6-digit OTP");
+      _showSnack("Please enter the full 6-digit OTP");
       return;
     }
 
@@ -72,7 +82,6 @@ class _VerificationPageState extends State<VerificationPage> {
     try {
       final response = await http.post(
         Uri.parse(ApiConfig.verifyOtp),
-
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "phoneNumber": widget.phoneNumber,
@@ -89,7 +98,7 @@ class _VerificationPageState extends State<VerificationPage> {
     } catch (e) {
       _showSnack("Error verifying OTP: $e");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -110,7 +119,14 @@ class _VerificationPageState extends State<VerificationPage> {
       if (response.statusCode == 200 && data['success'] == true) {
         _currentOtp = data['otp'];
         _expiresAt = DateTime.now().add(const Duration(minutes: 2));
-        _otpController.clear();
+
+        // Clear all boxes
+        for (var controller in _controllers) {
+          controller.clear();
+        }
+        // Focus the first box
+        _focusNodes[0].requestFocus();
+
         _showOtpHint();
       } else {
         _showSnack(data['message'] ?? 'Failed to resend OTP');
@@ -118,7 +134,7 @@ class _VerificationPageState extends State<VerificationPage> {
     } catch (e) {
       _showSnack("Error resending OTP: $e");
     } finally {
-      setState(() => _isResending = false);
+      if (mounted) setState(() => _isResending = false);
     }
   }
 
@@ -137,11 +153,16 @@ class _VerificationPageState extends State<VerificationPage> {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['token'] != null) {
+        // REMOVED CAREGIVER SYNC / USERID LOGIC AS REQUESTED
         await UserDataService.saveToken(data['token']);
+
+        // Only saving basic phone/username now
         await UserDataService.saveUserData(
           phone: phoneNumber,
           username: data['username'] ?? '',
         );
+
+        if (!mounted) return;
 
         _showSnack("Login successful!");
         Navigator.of(context).pushReplacementNamed(
@@ -149,13 +170,14 @@ class _VerificationPageState extends State<VerificationPage> {
           arguments: phoneNumber,
         );
       } else {
+        if (!mounted) return;
         _showSnack(data['error'] ?? "Login failed");
       }
     } catch (e) {
+      if (!mounted) return;
       _showSnack("Login error: $e");
     }
   }
-
 
   void _navigateBackToSignup() {
     Navigator.of(context).pushReplacementNamed(AppRoutes.signup);
@@ -163,8 +185,12 @@ class _VerificationPageState extends State<VerificationPage> {
 
   @override
   void dispose() {
-    _otpController.dispose();
-    _otpFocusNode.dispose();
+    for (var controller in _controllers) {
+      controller.dispose();
+    }
+    for (var node in _focusNodes) {
+      node.dispose();
+    }
     super.dispose();
   }
 
@@ -185,10 +211,12 @@ class _VerificationPageState extends State<VerificationPage> {
           builder: (context, constraints) {
             final bool isTablet = constraints.maxWidth > 600;
             final double horizontalPadding = isTablet ? 56 : 24;
-            final double maxContentWidth = isTablet ? 520 : constraints.maxWidth;
+            final double maxContentWidth =
+                isTablet ? 520 : constraints.maxWidth;
 
             return SingleChildScrollView(
-              padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 24),
+              padding: EdgeInsets.symmetric(
+                  horizontal: horizontalPadding, vertical: 24),
               child: Center(
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: maxContentWidth),
@@ -213,38 +241,28 @@ class _VerificationPageState extends State<VerificationPage> {
                       Text(
                         widget.phoneNumber,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 16, color: Colors.black54),
+                        style: const TextStyle(
+                            fontSize: 16, color: Colors.black54),
                       ),
                       const SizedBox(height: 32),
-                      GestureDetector(
-                        onTap: () => _otpFocusNode.requestFocus(),
-                        child: Column(
-                          children: [
-                            _buildOtpRow(maxContentWidth),
-                            const SizedBox(height: 10),
-                            const Text(
-                              'Tap to enter the 6-digit code',
-                              style: TextStyle(fontSize: 13, color: Colors.black45),
-                            ),
-                          ],
-                        ),
+
+                      // --- NEW REAL INPUT BOXES ---
+                      _buildRealOtpRow(),
+
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Tap to enter the 6-digit code',
+                        style: TextStyle(fontSize: 13, color: Colors.black45),
                       ),
-                      SizedBox(
-                        height: 0,
-                        child: TextField(
-                          controller: _otpController,
-                          focusNode: _otpFocusNode,
-                          keyboardType: TextInputType.number,
-                          maxLength: 6,
-                          decoration: const InputDecoration(counterText: '', border: InputBorder.none),
-                        ),
-                      ),
+
                       const SizedBox(height: 24),
                       TextButton(
                         onPressed: _isResending ? null : _resendOtp,
                         child: Text(
                           _isResending ? "Resending..." : "Resend OTP",
-                          style: const TextStyle(fontSize: 16, decoration: TextDecoration.underline),
+                          style: const TextStyle(
+                              fontSize: 16,
+                              decoration: TextDecoration.underline),
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -255,10 +273,13 @@ class _VerificationPageState extends State<VerificationPage> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xffFF9FA0),
                             foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18)),
                           ),
                           onPressed: _isLoading ? null : _verifyOtp,
-                          child: Text(_isLoading ? "Verifying..." : "Continue", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          child: Text(_isLoading ? "Verifying..." : "Continue",
+                              style: const TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold)),
                         ),
                       ),
                       const SizedBox(height: 40),
@@ -273,29 +294,64 @@ class _VerificationPageState extends State<VerificationPage> {
     );
   }
 
-  Widget _buildOtpRow(double contentWidth) {
-    final double spacing = 12;
-    final double availableWidth = contentWidth - spacing * 5;
-    final double fieldWidth = (availableWidth / 6).clamp(44, 64);
-    final text = _otpController.text;
-
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: spacing,
-      runSpacing: 12,
+  // --- WIDGET FOR 6 SEPARATE BOXES ---
+  Widget _buildRealOtpRow() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: List.generate(6, (index) {
-        final char = index < text.length ? text[index] : '';
         return SizedBox(
-          width: fieldWidth,
-          child: Container(
-            height: fieldWidth + 8,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xffF5F5F7),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: index == text.length ? Colors.black87 : Colors.black26, width: index == text.length ? 1.5 : 1),
+          width: 45,
+          height: 55,
+          child: TextField(
+            controller: _controllers[index],
+            focusNode: _focusNodes[index],
+            textAlign: TextAlign.center,
+            keyboardType: TextInputType.number,
+            maxLength: 1, // Only 1 digit per box
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            // Input Formatters to ensure only numbers
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+            ],
+            decoration: InputDecoration(
+              counterText: "", // Hide the "0/1" counter
+              filled: true,
+              fillColor: const Color(0xffF5F5F7),
+              contentPadding: EdgeInsets.zero,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.black26),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.black87, width: 2),
+              ),
             ),
-            child: Text(char, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            onChanged: (value) {
+              if (value.isNotEmpty) {
+                // If typed a digit, move to next box
+                if (index < 5) {
+                  FocusScope.of(context).requestFocus(_focusNodes[index + 1]);
+                } else {
+                  // If last box, close keyboard
+                  FocusScope.of(context).unfocus();
+                  _verifyOtp(); // Auto-submit when last digit entered (Optional)
+                }
+              } else {
+                // Logic for backspace (moves to previous box)
+                // Note: Standard onChanged doesn't catch backspace on empty field easily,
+                // but this works if they clear the digit.
+                if (index > 0) {
+                  FocusScope.of(context).requestFocus(_focusNodes[index - 1]);
+                }
+              }
+            },
+            // Handle deleting (backspace) when field is empty
+            onEditingComplete: () {
+              if (_controllers[index].text.isEmpty && index > 0) {
+                FocusScope.of(context).requestFocus(_focusNodes[index - 1]);
+              }
+            },
           ),
         );
       }),
