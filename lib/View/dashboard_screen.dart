@@ -8,7 +8,7 @@ import 'profile_screen.dart';
 import '../services/medicine_history_service.dart';
 import '../Controller/medicineController.dart';
 import '../Model/medicine.dart';
-import '../services/notification_service.dart'; // Import Service
+import '../services/notification_service.dart';
 
 // --- 1. Notification Model ---
 class NotificationEntry {
@@ -46,8 +46,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-
-    // 1. Request Notification Permissions & Initialize Service
     _initializeNotifications();
 
     // Initialize screens
@@ -63,21 +61,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _initializeNotifications() async {
-    await NotificationService.init(); // Must come before requesting permissions
     await NotificationService.requestPermissions();
   }
 
-  // Populate notifications based on medicines
-  // AND Schedule the actual system alarms
   Future<void> _updateNotificationsFromMedicines(
       List<Medicine> medicines) async {
-    // A. System Level: Cancel old and Schedule new High-Priority Alarms
     await NotificationService.cancelAll();
     for (var med in medicines) {
       await NotificationService.scheduleMedicineReminder(med);
     }
 
-    // B. App UI Level: Update the list in the drawer
     if (mounted) {
       setState(() {
         _notifications = medicines.map((med) {
@@ -92,7 +85,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // Delete a notification (UI only)
   void _deleteNotification(int index) {
     setState(() {
       _notifications.removeAt(index);
@@ -123,9 +115,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     bool showDashboardAppBar = _selectedIndex == 0;
 
     return Scaffold(
-      key: _scaffoldKey, // Attach the key here
+      key: _scaffoldKey,
       extendBodyBehindAppBar: false,
-      // --- Right Side Drawer for Notifications ---
       endDrawer: Drawer(
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.only(
@@ -193,7 +184,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       fontSize: 12, color: Colors.grey[500])),
                             ],
                           ),
-                          // --- The 3-Dots Menu with Delete ---
                           trailing: PopupMenuButton<String>(
                             icon:
                                 const Icon(Icons.more_vert, color: Colors.grey),
@@ -260,7 +250,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     IconButton(
                       icon: const Icon(Icons.notifications_active_outlined,
                           size: 28),
-                      // Open the drawer using the GlobalKey
                       onPressed: () =>
                           _scaffoldKey.currentState?.openEndDrawer(),
                       color: Colors.grey[700],
@@ -372,7 +361,6 @@ class _HomeContentState extends State<_HomeContent> {
     super.initState();
     _fetchMedicines();
 
-    // Timer to change quote every 10 SECONDS (as requested)
     _quoteTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       if (mounted) {
         setState(() {
@@ -390,7 +378,6 @@ class _HomeContentState extends State<_HomeContent> {
 
   void _fetchMedicines() {
     _medicinesFuture = _medicineController.getAllMedicines();
-    // Notify parent to update notification list
     _medicinesFuture.then((medicines) {
       if (widget.onMedicinesLoaded != null) {
         widget.onMedicinesLoaded!(medicines);
@@ -400,12 +387,16 @@ class _HomeContentState extends State<_HomeContent> {
 
   @override
   Widget build(BuildContext context) {
+    // Get screen height to calculate the "max height" for the list
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return SingleChildScrollView(
+      physics: const ClampingScrollPhysics(), // Keeps page stable
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Animated Health Quote Card
+          // --- 1. HEALTH QUOTE (Fixed at Top) ---
           TweenAnimationBuilder(
             duration: const Duration(seconds: 1),
             tween: Tween<double>(begin: 0.8, end: 1),
@@ -414,7 +405,7 @@ class _HomeContentState extends State<_HomeContent> {
                 Transform.scale(scale: value, child: child),
             child: Card(
               elevation: 5,
-              shadowColor: Colors.blueAccent.withOpacity(0.2),
+              shadowColor: Colors.blueAccent.withValues(alpha: 0.2),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20)),
               child: Container(
@@ -423,10 +414,7 @@ class _HomeContentState extends State<_HomeContent> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
                   gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFFE3F2FD),
-                      Color(0xFFFCE4EC)
-                    ], // Light Blue to Pink
+                    colors: [Color(0xFFE3F2FD), Color(0xFFFCE4EC)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -438,7 +426,7 @@ class _HomeContentState extends State<_HomeContent> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.6),
+                        color: Colors.white.withValues(alpha: 0.6),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
@@ -457,7 +445,6 @@ class _HomeContentState extends State<_HomeContent> {
                       ),
                     ),
                     const SizedBox(height: 15),
-                    // Animated Text Switcher
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 500),
                       transitionBuilder:
@@ -474,8 +461,7 @@ class _HomeContentState extends State<_HomeContent> {
                       },
                       child: Text(
                         _healthQuotes[_currentQuoteIndex],
-                        key: ValueKey<int>(
-                            _currentQuoteIndex), // Key triggers animation
+                        key: ValueKey<int>(_currentQuoteIndex),
                         style: const TextStyle(
                           fontSize: 18,
                           height: 1.3,
@@ -497,44 +483,88 @@ class _HomeContentState extends State<_HomeContent> {
             style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF37474F) // Dark Blue Grey
-                ),
+                color: Color(0xFF37474F)),
           ),
           const SizedBox(height: 15),
 
+          // --- 2. MEDICINE LIST (Constrained Height Area) ---
+          // This is the fix. It allows the list to grow up to 45% of the screen.
+          // If 1 item: it fits naturally.
+          // If 10 items: it scrolls INSIDE this box, keeping buttons visible.
           FutureBuilder<List<Medicine>>(
             future: _medicinesFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                    child: CircularProgressIndicator(color: Colors.pinkAccent));
+                return const SizedBox(
+                  height: 150,
+                  child: Center(
+                      child:
+                          CircularProgressIndicator(color: Colors.pinkAccent)),
+                );
               } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return Center(
-                  child: Container(
-                    margin: const EdgeInsets.only(top: 20),
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                        color: Colors.white60,
-                        borderRadius: BorderRadius.circular(15)),
-                    child: const Text("No medicines scheduled for today.",
-                        style: TextStyle(color: Colors.grey)),
+                // Empty state looks full enough
+                return Container(
+                  width: double.infinity,
+                  height: 150,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.5))),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.check_circle_outline,
+                          size: 40, color: Colors.green.withValues(alpha: 0.5)),
+                      const SizedBox(height: 10),
+                      const Text("No medicines scheduled for today.",
+                          style: TextStyle(
+                              color: Colors.grey, fontWeight: FontWeight.w500)),
+                    ],
                   ),
                 );
               }
 
               final medicines = snapshot.data!;
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: medicines.length,
-                itemBuilder: (context, index) {
-                  return _buildMedicineCard(context, medicines[index], index);
-                },
+
+              // ConstrainedBox enforces the "Window" effect
+              return ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: 100, // Always show at least this much
+                  maxHeight: screenHeight * 0.45, // Cap height at 45% of screen
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    // A subtle visual cue that this is a contained list
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Scrollbar(
+                    thumbVisibility: true,
+                    radius: const Radius.circular(10),
+                    child: ListView.builder(
+                      shrinkWrap:
+                          true, // Only take needed space up to max constraint
+                      padding: const EdgeInsets.only(
+                          bottom: 10, right: 5), // Space for scrollbar
+                      itemCount: medicines.length,
+                      physics:
+                          const BouncingScrollPhysics(), // Nice scroll feel
+                      itemBuilder: (context, index) {
+                        return _buildMedicineCard(
+                            context, medicines[index], index);
+                      },
+                    ),
+                  ),
+                ),
               );
             },
           ),
 
-          const SizedBox(height: 30),
+          const SizedBox(height: 20),
+
+          // --- 3. ACTION BUTTONS (Always accessible now) ---
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -555,6 +585,8 @@ class _HomeContentState extends State<_HomeContent> {
                       AppRoutes.viewAll)),
             ],
           ),
+          // Extra padding at bottom to ensure nothing is cut off
+          const SizedBox(height: 80),
         ],
       ),
     );
@@ -562,7 +594,6 @@ class _HomeContentState extends State<_HomeContent> {
 
   Widget _buildMedicineCard(
       BuildContext context, Medicine medicine, int index) {
-    // Staggered Slide Animation
     return TweenAnimationBuilder(
       duration: Duration(milliseconds: 300 + (index * 100)),
       tween: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero),
@@ -571,7 +602,7 @@ class _HomeContentState extends State<_HomeContent> {
           Transform.translate(offset: offset, child: child),
       child: Card(
         elevation: 3,
-        shadowColor: Colors.grey.withOpacity(0.2),
+        shadowColor: Colors.grey.withValues(alpha: 0.2),
         margin: const EdgeInsets.only(bottom: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         child: InkWell(
@@ -586,62 +617,47 @@ class _HomeContentState extends State<_HomeContent> {
                   end: Alignment.centerRight,
                 )),
             padding: const EdgeInsets.all(16.0),
-            child: Column(
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                          color: const Color(0xFFE1F5FE),
-                          borderRadius: BorderRadius.circular(12)),
-                      child: const Icon(Icons.access_alarm,
-                          color: Color(0xFF039BE5), size: 28),
-                    ),
-                    const SizedBox(width: 15),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(medicine.name,
-                              style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87)),
-                          const SizedBox(height: 4),
-                          Text('${medicine.time} • ${medicine.dose}',
-                              style: TextStyle(
-                                  fontSize: 15, color: Colors.grey[600])),
-                        ],
-                      ),
-                    ),
-                    InkWell(
-                      onTap: () async {
-                        await MedicineHistoryService.addMedicineRecord(
-                            MedicineRecord(
-                                medicineName: medicine.name,
-                                time: medicine.time,
-                                dosage: medicine.dose,
-                                dateTaken: DateTime.now()));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('${medicine.name} taken!')));
-                      },
-                      child: const Icon(Icons.check_circle_outline,
-                          color: Colors.green, size: 30),
-                    ),
-                  ],
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFE1F5FE),
+                      borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.access_alarm,
+                      color: Color(0xFF039BE5), size: 28),
                 ),
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    "View Details ➔",
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[400]),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(medicine.name,
+                          style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87)),
+                      const SizedBox(height: 4),
+                      Text('${medicine.time} • ${medicine.dose}',
+                          style:
+                              TextStyle(fontSize: 15, color: Colors.grey[600])),
+                    ],
                   ),
-                )
+                ),
+                InkWell(
+                  onTap: () async {
+                    await MedicineHistoryService.addMedicineRecord(
+                        MedicineRecord(
+                            medicineName: medicine.name,
+                            time: medicine.time,
+                            dosage: medicine.dose,
+                            dateTaken: DateTime.now()));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('${medicine.name} taken!')));
+                  },
+                  child: const Icon(Icons.check_circle_outline,
+                      color: Colors.green, size: 30),
+                ),
               ],
             ),
           ),
@@ -681,7 +697,7 @@ class _HomeContentState extends State<_HomeContent> {
                   child: Column(
                     children: [
                       Hero(
-                        tag: medicine.id, // Simple hero animation
+                        tag: medicine.id,
                         child: Container(
                           height: 220,
                           width: double.infinity,
@@ -690,7 +706,7 @@ class _HomeContentState extends State<_HomeContent> {
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
+                                  color: Colors.black.withValues(alpha: 0.05),
                                   blurRadius: 10)
                             ],
                           ),
@@ -753,7 +769,7 @@ class _HomeContentState extends State<_HomeContent> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.7),
+            color: Colors.white.withValues(alpha: 0.7),
             borderRadius: BorderRadius.circular(12)),
         child: Row(
           children: [
@@ -777,7 +793,7 @@ class _HomeContentState extends State<_HomeContent> {
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-              color: colors[0].withOpacity(0.3),
+              color: colors[0].withValues(alpha: 0.3),
               blurRadius: 8,
               offset: const Offset(0, 4))
         ],

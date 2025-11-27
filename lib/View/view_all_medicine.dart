@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../Controller/medicineController.dart';
 import '../Model/medicine.dart';
+// Import the new screen
+import 'edit_medicine_screen.dart';
 
 class ViewAllMedicinesScreen extends StatefulWidget {
   const ViewAllMedicinesScreen({super.key});
@@ -59,6 +61,21 @@ class _ViewAllMedicinesScreenState extends State<ViewAllMedicinesScreen> {
     );
   }
 
+  // --- NEW: Navigation to Edit Screen ---
+  void _navigateToEdit(Medicine med) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditMedicineScreen(medicine: med),
+      ),
+    );
+
+    // If result is true, it means we updated something, so refresh the list
+    if (result == true) {
+      _refreshMedicines();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -77,7 +94,7 @@ class _ViewAllMedicinesScreenState extends State<ViewAllMedicinesScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFFFFF0F5), Color(0xFFE1F5FE)], // Pink to Blue
+            colors: [Color(0xFFFFF0F5), Color(0xFFE1F5FE)],
           ),
         ),
         child: FutureBuilder<List<Medicine>>(
@@ -98,7 +115,6 @@ class _ViewAllMedicinesScreenState extends State<ViewAllMedicinesScreen> {
               itemBuilder: (context, index) {
                 final med = medicines[index];
 
-                // Animation: Slide Up + Fade
                 return TweenAnimationBuilder(
                   duration: Duration(milliseconds: 400 + (index * 50)),
                   tween: Tween<double>(begin: 0, end: 1),
@@ -112,79 +128,93 @@ class _ViewAllMedicinesScreenState extends State<ViewAllMedicinesScreen> {
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
+                      // Fixed deprecated withOpacity
+                      color: Colors.white.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(15),
                       boxShadow: [
                         BoxShadow(
-                            color: Colors.blueGrey.withOpacity(0.1),
+                            color: Colors.blueGrey.withValues(alpha: 0.1),
                             blurRadius: 6,
                             offset: const Offset(0, 3))
                       ],
                     ),
-                    child: Row(
-                      children: [
-                        // Left Image Section
-                        ClipRRect(
-                          borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(15),
-                              bottomLeft: Radius.circular(15)),
-                          child: Container(
-                            width: 100,
-                            height: 100,
-                            color: Colors.grey[100],
-                            child: (med.photo != null && med.photo!.isNotEmpty)
-                                ? Image.file(File(med.photo!),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (c, e, s) => const Icon(
-                                        Icons.medication,
-                                        color: Colors.pinkAccent))
-                                : const Icon(Icons.medication,
-                                    color: Colors.blueAccent, size: 40),
-                          ),
-                        ),
-                        // Content
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                    // Wrap the card content in Material & InkWell for tap effect
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(15),
+                      child: InkWell(
+                        onTap: () => _navigateToEdit(med), // Tap to Edit
+                        borderRadius: BorderRadius.circular(15),
+                        child: Row(
+                          children: [
+                            // Left Image Section
+                            ClipRRect(
+                              borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(15),
+                                  bottomLeft: Radius.circular(15)),
+                              child: Container(
+                                width: 100,
+                                height: 100,
+                                color: Colors.grey[100],
+                                child:
+                                    (med.photo != null && med.photo!.isNotEmpty)
+                                        ? Image.file(File(med.photo!),
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (c, e, s) =>
+                                                const Icon(Icons.medication,
+                                                    color: Colors.pinkAccent))
+                                        : const Icon(Icons.medication,
+                                            color: Colors.blueAccent, size: 40),
+                              ),
+                            ),
+                            // Content
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(
-                                        child: Text(med.name,
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 16))),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline,
-                                          color: Colors.redAccent, size: 22),
-                                      onPressed: () =>
-                                          _deleteMedicine(med.id, med.name),
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                    )
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                            child: Text(med.name,
+                                                style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 16))),
+                                        // Delete Button
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline,
+                                              color: Colors.redAccent,
+                                              size: 22),
+                                          onPressed: () =>
+                                              _deleteMedicine(med.id, med.name),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                        )
+                                      ],
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text("${med.time} • ${med.repeat}",
+                                        style: const TextStyle(
+                                            color: Colors.blueGrey,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                        "Tap to view details & edit", // Hint text
+                                        style: TextStyle(
+                                            color: Colors.pink[300],
+                                            fontSize: 11,
+                                            fontStyle: FontStyle.italic)),
                                   ],
                                 ),
-                                const SizedBox(height: 5),
-                                Text("${med.time} • ${med.repeat}",
-                                    style: const TextStyle(
-                                        color: Colors.blueGrey,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 5),
-                                Text(med.instruction,
-                                    style: const TextStyle(
-                                        color: Colors.grey, fontSize: 13),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis),
-                              ],
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 );

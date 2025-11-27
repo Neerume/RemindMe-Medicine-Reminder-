@@ -17,25 +17,33 @@ dependencies:
   firebase_core: ^3.6.0
   flutter_local_notifications: ^17.2.3
   timezone: ^0.9.4
+
   shared_preferences: ^2.3.2
   http: ^1.2.2
-  image_picker: ^1.1.2
+  image_picker:
 
   # --- THE FIX IS HERE ---
   # Version 1.0.8 is too old for your Android setup.
   # We must use 3.0.1 or higher to support Kotlin 1.9+
   flutter_timezone: ^3.0.1
 
+  intl: ^0.19.0
+  screenshot: ^3.0.0
+  flutter_sound: ^9.2.13        # For voice recording
+  permission_handler: ^11.1.0
+  audioplayers:
+  share_plus: ^10.0.0
+
   # --- New Features (QR & Sharing) ---
   qr_flutter: ^4.1.0
   url_launcher: ^6.3.1
   # Added for playing ringtone sounds
-  audioplayers: ^5.2.1
+
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true
