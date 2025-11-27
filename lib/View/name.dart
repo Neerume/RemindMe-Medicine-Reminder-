@@ -1,8 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-// ✅ FIXED: Changed 'remindme' to 'remind_me' to match your pubspec.yaml
-import 'package:remind_me/config/api.dart';
+import '../config/api.dart';
 import '../routes.dart';
 
 class NamePage extends StatefulWidget {

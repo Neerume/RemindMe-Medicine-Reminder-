@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../config/api.dart';
 import '../routes.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../services/user_data_service.dart';
+import 'inviteScreen.dart';
 
 class VerificationPage extends StatefulWidget {
   final String phoneNumber;
@@ -136,18 +135,40 @@ class _VerificationPageState extends State<VerificationPage> {
 
       final data = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && data['token'] != null) {
+      if (response.statusCode == 200 && data['token'] != null && data['user'] != null) {
+        final user = data['user'];
+
         await UserDataService.saveToken(data['token']);
+        await UserDataService.saveUserId(user['_id']);       // user ID from backend
         await UserDataService.saveUserData(
           phone: phoneNumber,
-          username: data['username'] ?? '',
+          username: user['name'] ?? '',                      // username from backend
         );
 
         _showSnack("Login successful!");
-        Navigator.of(context).pushReplacementNamed(
-          AppRoutes.name,
-          arguments: phoneNumber,
-        );
+
+        // Check for pending invite
+        final inviteInfo = await UserDataService.getInviteInfo();
+        if (inviteInfo['inviterId'] != null && inviteInfo['role'] != null) {
+          // Navigate to InviteScreen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => InviteScreen(
+                inviterId: inviteInfo['inviterId']!,
+                role: inviteInfo['role']!,
+                inviterName: inviteInfo['inviterName'],
+              ),
+            ),
+          );
+          await UserDataService.clearInviteInfo();
+        } else {
+          // Normal flow
+          Navigator.of(context).pushReplacementNamed(
+            AppRoutes.name,
+            arguments: phoneNumber,
+          );
+        }
       } else {
         _showSnack(data['error'] ?? "Login failed");
       }
@@ -156,7 +177,7 @@ class _VerificationPageState extends State<VerificationPage> {
     }
   }
 
-
+// -------------------- NAVIGATE BACK TO SIGNUP --------------------
   void _navigateBackToSignup() {
     Navigator.of(context).pushReplacementNamed(AppRoutes.signup);
   }
