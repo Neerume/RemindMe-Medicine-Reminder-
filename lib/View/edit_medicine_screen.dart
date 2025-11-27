@@ -165,7 +165,7 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
         pillCount: pillCountController.text,
         instruction: selectedInstruction,
         photo: selectedImage?.path,
-        createdAt: widget.medicine.createdAt,
+        createdAt: widget.medicine.createdAt, ringtone: '',
       );
 
       // Call API
