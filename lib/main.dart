@@ -1,50 +1,27 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import 'package:remind_me/routes.dart';
-import 'package:remind_me/services/notification_service.dart';
 import 'View/alarm_screen.dart';
-
-// GLOBAL NAVIGATOR KEY
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+import 'routes.dart';
+import 'services/app_navigator.dart';
+import 'services/invite_link_service.dart';
+import 'services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Firebase
   try {
     await Firebase.initializeApp();
-    debugPrint("✅ Firebase Initialized");
   } catch (e) {
-    debugPrint("⚠️ Firebase Warning: $e");
+    debugPrint('Firebase init error: $e');
   }
 
-  // 2. Timezone
   tz.initializeTimeZones();
 
-  // 3. Init Notifications
-  await NotificationService.init(navigatorKey);
-
-  // 4. CHECK IF LAUNCHED VIA NOTIFICATION (Lock Screen Logic)
-  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-
-  final NotificationAppLaunchDetails? notificationAppLaunchDetails =
-      await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
-
-  String initialRoute = AppRoutes.splash;
-  Object? initialArgs;
-
-  if (notificationAppLaunchDetails?.didNotificationLaunchApp ?? false) {
-    final payload = notificationAppLaunchDetails!.notificationResponse?.payload;
-    if (payload != null) {
-      debugPrint("🚀 App Launched via Alarm: $payload");
-      initialRoute = '/alarm';
-      initialArgs = payload;
-    }
-  }
+  await NotificationService.init(AppNavigator.navigatorKey);
+  await InviteLinkService.instance.initialize();
 
   runApp(MyApp(initialRoute: initialRoute, initialArgs: initialArgs));
 }
@@ -66,8 +43,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'RemindMe',
       debugShowCheckedModeBanner: false,
-      navigatorKey: navigatorKey,
-
+      navigatorKey: AppNavigator.navigatorKey,
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'Roboto',
@@ -103,32 +79,37 @@ class MyApp extends StatelessWidget {
             ),
           ),
         ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xffE8E9FF).withOpacity(0.3),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: primaryColor, width: 1.5),
+          ),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        ),
       ),
-
-      // SET INITIAL ROUTE LOGIC
-      initialRoute: initialRoute,
-
-      // DEFINE ROUTES
-      onGenerateRoute: (settings) {
-        // If the app launches directly to Alarm, pass arguments
-        if (settings.name == '/alarm') {
-          // Use args passed in main() if available, otherwise use settings.arguments
-          final args = settings.arguments ?? initialArgs;
-          return MaterialPageRoute(
-            builder: (context) => const AlarmScreen(),
-            settings: RouteSettings(name: '/alarm', arguments: args),
-          );
-        }
-
-        // Standard Routes
-        if (AppRoutes.routes.containsKey(settings.name)) {
-          return MaterialPageRoute(
-            builder: AppRoutes.routes[settings.name]!,
-            settings: settings,
-          );
-        }
-
-        return null;
+      initialRoute: AppRoutes.splash,
+      routes: {
+        ...AppRoutes.routes,
+        '/alarm': (context) => const AlarmScreen(),
+      },
+      onUnknownRoute: (settings) {
+        return MaterialPageRoute(
+          builder: (context) => Scaffold(
+            appBar: AppBar(title: const Text('Error')),
+            body: Center(child: Text('Route not found: \'${settings.name}\'')),
+          ),
+        );
       },
     );
   }

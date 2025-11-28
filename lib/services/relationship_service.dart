@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../Model/relationship_connection.dart';
+import '../config/api.dart';
 
 class RelationshipService {
   // Deep link configuration
@@ -8,9 +9,9 @@ class RelationshipService {
   static const String inviteHost = 'app';
   static const String invitePath = '/invite';
   static const String androidPackage = 'com.example.remindme';
+  static const String hostedInviteBase =
+      'https://neerume.github.io/remindme_links/invite.html';
 
-  // Base API URL (for invite response and fetching)
-  static const String baseApiUrl = 'https://remindme-backend-x1qd.onrender.com';
 
   /// Build an in-app deep link to open the Flutter app
   static String buildDeepLink({
@@ -50,6 +51,21 @@ class RelationshipService {
     return 'intent://$inviteHost$invitePath?$params#Intent;scheme=$inviteScheme;package=$androidPackage;end';
   }
 
+  /// HTTPS invite link hosted on GitHub Pages (App Link entry point)
+  static String buildHostedInviteLink({
+    required String role,
+    required String inviterId,
+    String? inviterName,
+  }) {
+    final params = {
+      'role': role,
+      'inviterId': inviterId,
+      if (inviterName != null && inviterName.isNotEmpty) 'inviterName': inviterName,
+    };
+    final query = Uri(queryParameters: params).query;
+    return '$hostedInviteBase?$query';
+  }
+
   /// Respond to an invite (accept/reject)
   static Future<String> respondToInvite({
     required String inviterId,
@@ -57,20 +73,29 @@ class RelationshipService {
     required String type,
     required String action, // 'accept' or 'reject'
   }) async {
-    final url = Uri.parse('$baseApiUrl/respond-invite');
+    final url = Uri.parse(ApiConfig.respondInvite);
+
+    // Define the body first
+    final body = jsonEncode({
+      'inviterId': inviterId,
+      'inviteeId': inviteeId,
+      'type': type,
+      'action': action,
+    });
+
+    print("Sending POST to $url");
+    print("Body: $body");
+
     final response = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'inviterId': inviterId,
-        'inviteeId': inviteeId,
-        'type': type,
-        'action': action,
-      }),
+      body: body,
     );
 
-    final body = jsonDecode(response.body);
-    final message = body['message'] ?? 'Unexpected response';
+    print("Response: ${response.statusCode} ${response.body}");
+
+    final bodyJson = jsonDecode(response.body);
+    final message = bodyJson['message'] ?? 'Unexpected response';
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return message;
@@ -81,7 +106,7 @@ class RelationshipService {
 
   /// Fetch caregivers
   static Future<List<RelationshipConnection>> fetchCaregivers(String userId) async {
-    final url = Uri.parse('$baseApiUrl/users/$userId/caregivers');
+    final url = Uri.parse(ApiConfig.getCaregivers);
     final response = await http.get(url);
 
     if (response.statusCode == 200) {
@@ -93,7 +118,7 @@ class RelationshipService {
 
   /// Fetch patients
   static Future<List<RelationshipConnection>> fetchPatients(String userId) async {
-    final url = Uri.parse('$baseApiUrl/users/$userId/patients');
+    final url = Uri.parse(ApiConfig.getPatients);
     final response = await http.get(url);
 
     if (response.statusCode == 200) {
@@ -102,4 +127,33 @@ class RelationshipService {
     }
     throw Exception('Failed to load patients');
   }
+
+  /// Invite a caregiver (creates pending invite on backend)
+  static Future<void> inviteCaregiver({
+    required String inviterId,
+    required String inviteeId,
+  }) async {
+    final url = Uri.parse('${ApiConfig.inviteCaregiver}/$inviterId?userId=$inviteeId');
+    final response = await http.post(url);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['message'] ?? 'Failed to send caregiver invite');
+    }
+  }
+
+  /// Invite a patient (creates pending invite on backend)
+  static Future<void> invitePatient({
+    required String inviterId,
+    required String inviteeId,
+  }) async {
+    final url = Uri.parse('${ApiConfig.invitePatient}/$inviterId?userId=$inviteeId');
+    final response = await http.post(url);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final body = jsonDecode(response.body);
+      throw Exception(body['message'] ?? 'Failed to send patient invite');
+    }
+  }
+
 }
