@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:timezone/data/latest.dart' as tz;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'View/alarm_screen.dart';
 import 'routes.dart';
@@ -22,11 +23,18 @@ Future<void> main() async {
   await NotificationService.init(AppNavigator.navigatorKey);
   await InviteLinkService.instance.initialize();
 
-  runApp(const MyApp());
+  runApp(MyApp(initialRoute: initialRoute, initialArgs: initialArgs));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final String initialRoute;
+  final Object? initialArgs;
+
+  const MyApp({
+    super.key,
+    required this.initialRoute,
+    this.initialArgs,
+  });
 
   @override
   Widget build(BuildContext context) {

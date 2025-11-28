@@ -9,6 +9,7 @@ import '../services/medicine_history_service.dart';
 import '../Controller/medicineController.dart';
 import '../Model/medicine.dart';
 import '../services/notification_service.dart';
+import '../services/activity_log_service.dart';
 
 // --- 1. Notification Model ---
 class NotificationEntry {
@@ -26,9 +27,7 @@ class NotificationEntry {
 }
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key, this.initialIndex = 0});
-
-  final int initialIndex;
+  const DashboardScreen({super.key});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -37,7 +36,8 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   // Key to control the drawer
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  late int _selectedIndex; // For bottom navigation bar
+
+  int _selectedIndex = 0;
   Key _homeKey = UniqueKey();
   late final List<Widget> _widgetOptions;
 
@@ -50,7 +50,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _initializeNotifications();
 
     // Initialize screens
-    _selectedIndex = widget.initialIndex;
     _widgetOptions = <Widget>[
       _HomeContent(
         key: _homeKey,
