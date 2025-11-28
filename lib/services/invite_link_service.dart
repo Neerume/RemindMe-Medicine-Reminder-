@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 
-import '../View/inviteScreen.dart';
+import '../View/invite_Screen.dart';
 import '../routes.dart';
 import 'app_navigator.dart';
 import 'relationship_service.dart';
@@ -18,6 +18,10 @@ class InviteLinkService {
   StreamSubscription<Uri>? _sub;
   bool _initialized = false;
 
+  get initialRoute => null;
+
+  Object? get initialArgs => null;
+
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
@@ -26,7 +30,7 @@ class InviteLinkService {
     await _handleUri(initialUri);
 
     _sub = _appLinks.uriLinkStream.listen(
-          (uri) => _handleUri(uri),
+      (uri) => _handleUri(uri),
       onError: (err) => debugPrint('Invite link error: $err'),
     );
   }
@@ -57,7 +61,9 @@ class InviteLinkService {
     final role = uri.queryParameters['role'];
     final inviterName = uri.queryParameters['inviterName'];
 
-    if (inviterId == null || inviterId.isEmpty || role == null ||
+    if (inviterId == null ||
+        inviterId.isEmpty ||
+        role == null ||
         role.isEmpty) {
       return;
     }
@@ -94,12 +100,11 @@ class InviteLinkService {
     // Navigate to InviteScreen
     navigator?.push(
       MaterialPageRoute(
-        builder: (_) =>
-            InviteScreen(
-              inviterId: inviterId,
-              role: role,
-              inviterName: inviterName,
-            ),
+        builder: (_) => InviteScreen(
+          inviterId: inviterId,
+          role: role,
+          inviterName: inviterName,
+        ),
       ),
     );
   }

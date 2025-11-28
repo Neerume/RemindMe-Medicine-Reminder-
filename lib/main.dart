@@ -23,6 +23,11 @@ Future<void> main() async {
   await NotificationService.init(AppNavigator.navigatorKey);
   await InviteLinkService.instance.initialize();
 
+  // FIX: Define the variables before using them
+  final String initialRoute =
+      InviteLinkService.instance.initialRoute ?? AppRoutes.splash;
+  final Object? initialArgs = InviteLinkService.instance.initialArgs;
+
   runApp(MyApp(initialRoute: initialRoute, initialArgs: initialArgs));
 }
 
@@ -81,7 +86,8 @@ class MyApp extends StatelessWidget {
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: const Color(0xffE8E9FF).withOpacity(0.3),
+          // FIX: Updated deprecated withOpacity to withValues
+          fillColor: const Color(0xffE8E9FF).withValues(alpha: 0.3),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
@@ -98,7 +104,7 @@ class MyApp extends StatelessWidget {
               const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         ),
       ),
-      initialRoute: AppRoutes.splash,
+      initialRoute: initialRoute, // FIX: Use the passed variable
       routes: {
         ...AppRoutes.routes,
         '/alarm': (context) => const AlarmScreen(),

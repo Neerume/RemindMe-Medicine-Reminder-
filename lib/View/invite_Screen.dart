@@ -54,14 +54,14 @@ class _InviteScreenState extends State<InviteScreen> {
       // Wait for clear info
       await UserDataService.clearInviteInfo();
 
-      // FIXED: Added this check again because we used 'await' above.
-      // We cannot use 'context' (Navigator) after an await without checking if mounted.
       if (!mounted) return;
 
       if (action == 'accept') {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const DashboardScreen(initialIndex: 2)),
-              (_) => false,
+          // FIX: This now works because we updated DashboardScreen
+          MaterialPageRoute(
+              builder: (_) => const DashboardScreen(initialIndex: 2)),
+          (_) => false,
         );
       } else {
         Navigator.of(context).pop();
@@ -76,14 +76,17 @@ class _InviteScreenState extends State<InviteScreen> {
       }
     }
   }
+
   Future<void> _skipInvite() async {
     await UserDataService.clearInviteInfo();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
+      // FIX: This now works because we updated DashboardScreen
       MaterialPageRoute(builder: (_) => const DashboardScreen(initialIndex: 0)),
-          (_) => false,
+      (_) => false,
     );
   }
+
   @override
   Widget build(BuildContext context) {
     final isCaregiverInvite = widget.role == 'caregiver';
@@ -247,14 +250,14 @@ class _InviteScreenState extends State<InviteScreen> {
                 onPressed: _isProcessing ? null : _skipInvite,
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                 ),
                 child: const Text(
                   'Skip for now',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ),
-
               const Spacer(),
               const Text(
                 'Need someone else to help? Share your link from the caregiver tab anytime.',

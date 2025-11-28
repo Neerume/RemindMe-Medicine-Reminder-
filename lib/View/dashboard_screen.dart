@@ -9,7 +9,6 @@ import '../services/medicine_history_service.dart';
 import '../Controller/medicineController.dart';
 import '../Model/medicine.dart';
 import '../services/notification_service.dart';
-import '../services/activity_log_service.dart';
 
 // --- 1. Notification Model ---
 class NotificationEntry {
@@ -27,7 +26,13 @@ class NotificationEntry {
 }
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  // FIX: Added initialIndex parameter to support redirection from Invite Screen
+  final int initialIndex;
+
+  const DashboardScreen({
+    super.key,
+    this.initialIndex = 0, // Default to 0 (Home)
+  });
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -47,6 +52,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+
+    // FIX: Set the starting tab based on what was passed (e.g., from Invite Screen)
+    _selectedIndex = widget.initialIndex;
+
     _initializeNotifications();
 
     // Initialize screens
@@ -101,6 +110,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
+      // If tapping Home (index 0), refresh the home key to reload data
       if (index == 0) {
         _homeKey = UniqueKey();
         _widgetOptions[0] = _HomeContent(
@@ -489,9 +499,6 @@ class _HomeContentState extends State<_HomeContent> {
           const SizedBox(height: 15),
 
           // --- 2. MEDICINE LIST (Constrained Height Area) ---
-          // This is the fix. It allows the list to grow up to 45% of the screen.
-          // If 1 item: it fits naturally.
-          // If 10 items: it scrolls INSIDE this box, keeping buttons visible.
           FutureBuilder<List<Medicine>>(
             future: _medicinesFuture,
             builder: (context, snapshot) {
@@ -503,7 +510,6 @@ class _HomeContentState extends State<_HomeContent> {
                           CircularProgressIndicator(color: Colors.pinkAccent)),
                 );
               } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                // Empty state looks full enough
                 return Container(
                   width: double.infinity,
                   height: 150,
@@ -529,7 +535,6 @@ class _HomeContentState extends State<_HomeContent> {
 
               final medicines = snapshot.data!;
 
-              // ConstrainedBox enforces the "Window" effect
               return ConstrainedBox(
                 constraints: BoxConstraints(
                   minHeight: 100, // Always show at least this much
@@ -537,7 +542,6 @@ class _HomeContentState extends State<_HomeContent> {
                 ),
                 child: Container(
                   decoration: BoxDecoration(
-                    // A subtle visual cue that this is a contained list
                     color: Colors.transparent,
                     borderRadius: BorderRadius.circular(15),
                   ),
@@ -545,13 +549,10 @@ class _HomeContentState extends State<_HomeContent> {
                     thumbVisibility: true,
                     radius: const Radius.circular(10),
                     child: ListView.builder(
-                      shrinkWrap:
-                          true, // Only take needed space up to max constraint
-                      padding: const EdgeInsets.only(
-                          bottom: 10, right: 5), // Space for scrollbar
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.only(bottom: 10, right: 5),
                       itemCount: medicines.length,
-                      physics:
-                          const BouncingScrollPhysics(), // Nice scroll feel
+                      physics: const BouncingScrollPhysics(),
                       itemBuilder: (context, index) {
                         return _buildMedicineCard(
                             context, medicines[index], index);
@@ -565,7 +566,7 @@ class _HomeContentState extends State<_HomeContent> {
 
           const SizedBox(height: 20),
 
-          // --- 3. ACTION BUTTONS (Always accessible now) ---
+          // --- 3. ACTION BUTTONS ---
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -586,7 +587,6 @@ class _HomeContentState extends State<_HomeContent> {
                       AppRoutes.viewAll)),
             ],
           ),
-          // Extra padding at bottom to ensure nothing is cut off
           const SizedBox(height: 80),
         ],
       ),
