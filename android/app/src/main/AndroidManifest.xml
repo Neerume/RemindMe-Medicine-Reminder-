@@ -1,40 +1,33 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.remindme">
 
-    <!-- 1. PERMISSIONS -->
+    <!-- PERMISSIONS -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- Critical for showing notifications on Lock Screen -->
+    <!-- CRITICAL FOR ALARM SCREEN -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
-
-    <!-- Exact Alarm Permissions (Required for Meds on Android 12+) -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Hardware Permissions -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.CAMERA" />
-
-    <!-- STORAGE PERMISSIONS (Updated for Gallery Save) -->
+    <!-- MEDIA -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <!-- NEW: Required for Android 13+ to access gallery images -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
 
-    <!--
-       NEW attribute: android:requestLegacyExternalStorage="true"
-       This allows file saving on Android 10 devices.
-    -->
     <application
         android:label="RemindMe"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:requestLegacyExternalStorage="true">
 
+        <!--
+           NOTE: The attributes below (showWhenLocked, turnScreenOn)
+           must be inside the tag, but comments must be outside.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -42,9 +35,10 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
-            android:windowSoftInputMode="adjustResize">
+            android:showOnLockScreen="true">
 
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
@@ -61,16 +55,11 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!--
-           2. RECEIVERS (CRUCIAL FOR ALARMS)
-        -->
-
-        <!-- Handles the actual Alarm firing -->
+        <!-- NOTIFICATION RECEIVERS -->
         <receiver
             android:exported="false"
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
 
-        <!-- Handles restarting alarms after reboot -->
         <receiver
             android:exported="true"
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">

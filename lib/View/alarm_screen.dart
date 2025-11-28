@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
-// IMPORT DASHBOARD SCREEN to access ActivityLogService
+// Ensure this matches where your Dashboard/Log Service is located
 import 'dashboard_screen.dart';
 
 class AlarmScreen extends StatefulWidget {
@@ -17,6 +17,9 @@ class _AlarmScreenState extends State<AlarmScreen> {
   String currentTime = "";
   String currentDate = "";
 
+  // 1. CREATE A SCROLL CONTROLLER
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -25,23 +28,24 @@ class _AlarmScreenState extends State<AlarmScreen> {
     currentDate = DateFormat('EEEE, MMMM d').format(now);
   }
 
-  // UPDATED: Sends Log to Dashboard
+  @override
+  void dispose() {
+    // 2. DISPOSE THE CONTROLLER WHEN SCREEN CLOSES
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   void _handleAction(String action, String medicineName, String payload) async {
-    // 1. Stop Current Sound
+    // Stop the ringing immediately
     await NotificationService.cancelAll();
 
     String title = "";
     String body = "";
-
-    // Format Time for Log
     final now = DateTime.now();
     String timeStr = "${now.hour}:${now.minute.toString().padLeft(2, '0')}";
 
     if (action == "Snooze") {
-      // Schedule a new notification 5 minutes from now
       await NotificationService.scheduleSnoozeNotification(payload, minutes: 5);
-
-      // ADD LOG TO DASHBOARD
       ActivityLogService.addLog(NotificationEntry(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: "Alarm Snoozed",
@@ -49,14 +53,11 @@ class _AlarmScreenState extends State<AlarmScreen> {
         time: timeStr,
         type: NotificationType.snoozed,
       ));
-
       title = "Snoozed 💤";
       body = "Alarm will ring again in 5 minutes.";
     } else if (action == "Taken") {
       title = "Great Job! 🎉";
       body = "Marked $medicineName as taken.";
-
-      // ADD LOG TO DASHBOARD
       ActivityLogService.addLog(NotificationEntry(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: "Medicine Taken",
@@ -67,8 +68,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
     } else if (action == "Skip") {
       title = "Skipped ⚠️";
       body = "You skipped $medicineName.";
-
-      // ADD LOG TO DASHBOARD
       ActivityLogService.addLog(NotificationEntry(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: "Medicine Skipped",
@@ -78,16 +77,12 @@ class _AlarmScreenState extends State<AlarmScreen> {
       ));
     }
 
-    // 2. Show Confirmation Feedback
     await NotificationService.showConfirmationNotification(title, body);
-
-    // 3. Close the Alarm Screen and App
     SystemNavigator.pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Decode Payload
     final String payload =
         ModalRoute.of(context)?.settings.arguments as String? ?? "Medicine|||";
     final List<String> parts = payload.split('|');
@@ -103,7 +98,12 @@ class _AlarmScreenState extends State<AlarmScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
+          // 3. ASSIGN THE CONTROLLER HERE
+          controller: _scrollController,
+
           child: Container(
+            // We ensure the container is at least the height of the screen
+            // to fill the UI, but allowing scrolling if content overflows on small screens.
             height: size.height - MediaQuery.of(context).padding.top,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             child: Column(
@@ -141,7 +141,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                       borderRadius: BorderRadius.circular(35),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
+                          color: Colors.black.withOpacity(0.05),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         )
@@ -170,7 +170,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                             border: Border.all(color: Colors.white, width: 4),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.1),
+                                color: Colors.black.withOpacity(0.1),
                                 blurRadius: 15,
                                 offset: const Offset(0, 8),
                               )
@@ -194,7 +194,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                               style: const TextStyle(
                                 fontSize: 26,
                                 fontWeight: FontWeight.bold,
-                                color: const Color(0xFF5C6BC0),
+                                color: Color(0xFF5C6BC0),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -251,11 +251,9 @@ class _AlarmScreenState extends State<AlarmScreen> {
                                     borderRadius: BorderRadius.circular(25),
                                   ),
                                 ),
-                                // UPDATED: Pass payload to _handleAction
                                 onPressed: () => _handleAction(
                                     "Snooze", medicineName, payload),
-                                child: const Text(
-                                    "Snooze 5m", // Changed text slightly
+                                child: const Text("Snooze 5m",
                                     style: TextStyle(
                                         color: Colors.white, fontSize: 16)),
                               ),
