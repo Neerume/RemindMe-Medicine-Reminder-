@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
-// You can keep dashboard_screen import if you navigate there,
-// but we will define the missing services locally or you should move them to a separate file.
-import 'dashboard_screen.dart';
+// ✅ IMPORT THE NEW SERVICE FILE
+import '../services/activity_log_service.dart';
 
 class AlarmScreen extends StatefulWidget {
   const AlarmScreen({super.key});
@@ -18,6 +17,9 @@ class _AlarmScreenState extends State<AlarmScreen> {
   String currentTime = "";
   String currentDate = "";
 
+  // Scroll Controller
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -26,23 +28,25 @@ class _AlarmScreenState extends State<AlarmScreen> {
     currentDate = DateFormat('EEEE, MMMM d').format(now);
   }
 
-  // UPDATED: Sends Log to Dashboard
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   void _handleAction(String action, String medicineName, String payload) async {
-    // 1. Stop Current Sound
+    // Stop the ringing
     await NotificationService.cancelAll();
 
     String title = "";
     String body = "";
-
-    // Format Time for Log
     final now = DateTime.now();
     String timeStr = "${now.hour}:${now.minute.toString().padLeft(2, '0')}";
 
     if (action == "Snooze") {
-      // Schedule a new notification 5 minutes from now
       await NotificationService.scheduleSnoozeNotification(payload, minutes: 5);
 
-      // ADD LOG
+      // ✅ NO MORE ERRORS HERE
       ActivityLogService.addLog(NotificationEntry(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: "Alarm Snoozed",
@@ -57,7 +61,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
       title = "Great Job! 🎉";
       body = "Marked $medicineName as taken.";
 
-      // ADD LOG
       ActivityLogService.addLog(NotificationEntry(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: "Medicine Taken",
@@ -69,7 +72,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
       title = "Skipped ⚠️";
       body = "You skipped $medicineName.";
 
-      // ADD LOG
       ActivityLogService.addLog(NotificationEntry(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: "Medicine Skipped",
@@ -79,16 +81,12 @@ class _AlarmScreenState extends State<AlarmScreen> {
       ));
     }
 
-    // 2. Show Confirmation Feedback
     await NotificationService.showConfirmationNotification(title, body);
-
-    // 3. Close the Alarm Screen and App
     SystemNavigator.pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Decode Payload
     final String payload =
         ModalRoute.of(context)?.settings.arguments as String? ?? "Medicine|||";
     final List<String> parts = payload.split('|');
@@ -104,13 +102,13 @@ class _AlarmScreenState extends State<AlarmScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
+          controller: _scrollController,
           child: Container(
             height: size.height - MediaQuery.of(context).padding.top,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             child: Column(
               children: [
                 const SizedBox(height: 10),
-                // --- TOP: TIME & DATE ---
                 Text(
                   currentTime,
                   style: const TextStyle(
@@ -130,8 +128,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // --- MAIN CARD ---
                 Expanded(
                   child: Container(
                     width: double.infinity,
@@ -142,7 +138,8 @@ class _AlarmScreenState extends State<AlarmScreen> {
                       borderRadius: BorderRadius.circular(35),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          // ✅ FIXED DEPRECATION WARNING
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         )
@@ -151,7 +148,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // 1. Header
                         const Text(
                           "Medicine time",
                           style: TextStyle(
@@ -160,8 +156,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-
-                        // 2. Photo Circle
                         Container(
                           height: 140,
                           width: 140,
@@ -171,7 +165,8 @@ class _AlarmScreenState extends State<AlarmScreen> {
                             border: Border.all(color: Colors.white, width: 4),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
+                                // ✅ FIXED DEPRECATION WARNING
+                                color: Colors.black.withValues(alpha: 0.1),
                                 blurRadius: 15,
                                 offset: const Offset(0, 8),
                               )
@@ -185,8 +180,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
                                     size: 60, color: Colors.grey),
                           ),
                         ),
-
-                        // 3. Info Section
                         Column(
                           children: [
                             Text(
@@ -195,7 +188,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
                               style: const TextStyle(
                                 fontSize: 26,
                                 fontWeight: FontWeight.bold,
-                                // Fixed unnecessary const error here
                                 color: Color(0xFF5C6BC0),
                               ),
                             ),
@@ -235,13 +227,9 @@ class _AlarmScreenState extends State<AlarmScreen> {
                             ),
                           ],
                         ),
-
                         const SizedBox(height: 10),
-
-                        // 4. Buttons
                         Column(
                           children: [
-                            // Snooze
                             SizedBox(
                               width: 150,
                               height: 45,
@@ -261,8 +249,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
                               ),
                             ),
                             const SizedBox(height: 20),
-
-                            // Skip & Taken Row
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -325,40 +311,4 @@ class _AlarmScreenState extends State<AlarmScreen> {
       ),
     );
   }
-}
-
-// =========================================================
-// MISSING CLASSES ADDED BELOW TO FIX ERRORS
-// (Ideally, move these to a separate file like services/activity_service.dart)
-// =========================================================
-
-enum NotificationType { snoozed, taken, skipped }
-
-class NotificationEntry {
-  final String id;
-  final String title;
-  final String message;
-  final String time;
-  final NotificationType type;
-
-  NotificationEntry({
-    required this.id,
-    required this.title,
-    required this.message,
-    required this.time,
-    required this.type,
-  });
-}
-
-class ActivityLogService {
-  // A simple list to act as temporary storage.
-  // In a real app, replace this with SharedPreferences or Database logic.
-  static final List<NotificationEntry> _logs = [];
-
-  static void addLog(NotificationEntry entry) {
-    _logs.add(entry);
-    print("LOG ADDED: ${entry.title} - ${entry.message} [${entry.type}]");
-  }
-
-  static List<NotificationEntry> get logs => _logs;
 }

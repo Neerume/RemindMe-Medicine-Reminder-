@@ -9,6 +9,7 @@ import '../services/medicine_history_service.dart';
 import '../Controller/medicineController.dart';
 import '../Model/medicine.dart';
 import '../services/notification_service.dart';
+import '../services/activity_log_service.dart';
 
 // --- 1. Notification Model ---
 class NotificationEntry {

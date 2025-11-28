@@ -40,8 +40,10 @@ class NotificationService {
 
     await _notificationsPlugin.initialize(
       settings,
+      // 1. Handles Banner Tap (When app is in foreground/background)
       onDidReceiveNotificationResponse: (NotificationResponse details) {
         if (details.payload != null && _navigatorKey?.currentState != null) {
+          debugPrint("🔔 Notification Tapped: ${details.payload}");
           _navigatorKey!.currentState!.pushNamed(
             '/alarm',
             arguments: details.payload,
@@ -66,7 +68,7 @@ class NotificationService {
     await _notificationsPlugin.cancelAll();
   }
 
-  // --- Helper to show simple confirmation notification ---
+  // --- CONFIRMATION NOTIFICATION ---
   static Future<void> showConfirmationNotification(
       String title, String body) async {
     const AndroidNotificationDetails androidDetails =
@@ -83,36 +85,36 @@ class NotificationService {
         NotificationDetails(android: androidDetails);
 
     await _notificationsPlugin.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000, // Unique ID
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title,
       body,
       details,
     );
   }
 
-  // --- NEW: SNOOZE FUNCTION ---
+  // --- SNOOZE FUNCTION ---
   static Future<void> scheduleSnoozeNotification(String payload,
       {int minutes = 5}) async {
     try {
-      // 1. Calculate time (Current time + 5 minutes)
       final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
       final tz.TZDateTime scheduledDate = now.add(Duration(minutes: minutes));
 
-      // 2. Configure Notification Details
-      // We use a specific channel for snoozes to ensure it rings loudly
       const AndroidNotificationDetails androidDetails =
           AndroidNotificationDetails(
-        'med_snooze_channel', // Channel ID
-        'Snooze Alarms', // Channel Name
+        'med_snooze_channel',
+        'Snooze Alarms',
         channelDescription: 'Channel for Medicine Alarms (Snoozed)',
-        importance: Importance.max,
+        importance: Importance.max, // Heads-up Banner
         priority: Priority.high,
-        sound: RawResourceAndroidNotificationSound(
-            'tone1'), // Default sound for snooze
-        fullScreenIntent: true, // CRITICAL: Opens the AlarmScreen
-        autoCancel: true,
+        sound: RawResourceAndroidNotificationSound('tone1'),
+
+        // THIS MAKES IT OPEN ON LOCK SCREEN
+        fullScreenIntent: true,
+
+        autoCancel: false, // Keep ringing until action
         audioAttributesUsage: AudioAttributesUsage.alarm,
         playSound: true,
+        category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
       );
 
@@ -123,9 +125,8 @@ class NotificationService {
             interruptionLevel: InterruptionLevel.timeSensitive),
       );
 
-      // 3. Schedule
       await _notificationsPlugin.zonedSchedule(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000, // Unique ID
+        DateTime.now().millisecondsSinceEpoch ~/ 1000,
         'Snooze: Medicine Time!',
         'It is time to take your medicine (Snoozed)',
         scheduledDate,
@@ -133,15 +134,15 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        payload:
-            payload, // Pass the same data back so the screen populates correctly
+        payload: payload,
       );
-      print("Snooze scheduled for 5 minutes from now.");
+      print("Snooze scheduled for $minutes minutes.");
     } catch (e) {
       print("Error scheduling snooze: $e");
     }
   }
 
+  // --- MAIN ALARM FUNCTION ---
   static Future<void> scheduleMedicineReminder(Medicine medicine,
       [String? ringtone]) async {
     try {
@@ -177,29 +178,33 @@ class NotificationService {
         );
       }
 
+      // ⚠️ UPDATED CHANNEL ID TO V2 TO FORCE LOCK SCREEN SETTINGS
       AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'med_alarm_$soundFileName',
-        'Medicine Alarm ($soundFileName)',
+        'med_alarm_channel_v2_$soundFileName', // CHANGED ID
+        'Medicine Alarm V2 ($soundFileName)', // CHANGED NAME
         channelDescription: 'Continuous alarm sound for medicines',
-        importance: Importance.max,
-        priority: Priority.high,
-        fullScreenIntent: true,
+
+        // --- CRITICAL SETTINGS ---
+        importance: Importance.max, // Shows Banner
+        priority: Priority.max, // High Priority
+        fullScreenIntent: true, // Opens Alarm Screen on Lock Screen
+        category: AndroidNotificationCategory.alarm, // Treats as Alarm
+
         visibility: NotificationVisibility.public,
         playSound: true,
         sound: RawResourceAndroidNotificationSound(soundFileName),
         audioAttributesUsage: AudioAttributesUsage.alarm,
-        additionalFlags: Int32List.fromList(<int>[4]),
+        additionalFlags:
+            Int32List.fromList(<int>[4]), // Insistent (loops sound)
         styleInformation: styleInformation,
+        autoCancel: false, // Don't disappear automatically
         actions: <AndroidNotificationAction>[
           const AndroidNotificationAction(
-            'mark_taken_id',
-            'Mark as Taken',
+            'view_id',
+            'Open',
             showsUserInterface: true,
-            cancelNotification: true,
           ),
         ],
-        category: AndroidNotificationCategory.alarm,
-        autoCancel: true,
       );
 
       NotificationDetails details = NotificationDetails(
