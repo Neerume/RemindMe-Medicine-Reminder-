@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
+// Ensure these imports exist in your project structure
 import '../Model/medicine.dart';
 import '../Controller/medicineController.dart';
 import '../services/notification_service.dart';
@@ -60,16 +61,35 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
 
   // --- Helper Methods ---
 
+  // UPDATED METHOD HERE
   Future<void> playRingtone(String ringtoneName) async {
-    // This plays the sound in the UI for preview purposes
-    String file = "";
-    if (ringtoneName == "Tone 1") file = "sounds/tone1.wav";
-    if (ringtoneName == "Tone 2") file = "sounds/tone2.wav";
-    if (ringtoneName == "Tone 3") file = "sounds/tone3.wav";
-    if (ringtoneName == "Tone 4") file = "sounds/tone4.wav";
+    // 1. Stop any currently playing sound
+    await audioPlayer.stop();
 
-    if (file.isNotEmpty) {
-      await audioPlayer.play(AssetSource(file));
+    String filePath = "";
+    // Note: When using AssetSource, do NOT include 'assets/' prefix.
+    // The package adds it automatically.
+    if (ringtoneName == "Tone 1") filePath = "sounds/tone1.wav";
+    if (ringtoneName == "Tone 2") filePath = "sounds/tone2.wav";
+    if (ringtoneName == "Tone 3") filePath = "sounds/tone3.wav";
+    if (ringtoneName == "Tone 4") filePath = "sounds/tone4.wav";
+
+    if (filePath.isNotEmpty) {
+      try {
+        // 2. Set source first (helps with buffering on some devices)
+        await audioPlayer.setSource(AssetSource(filePath));
+
+        // 3. Set volume to max to ensure we can hear it
+        await audioPlayer.setVolume(1.0);
+
+        // 4. Play
+        await audioPlayer.resume();
+
+        print("Playing sound from: assets/$filePath"); // Debug print
+      } catch (e) {
+        print("ERROR PLAYING SOUND: $e");
+        // This will print to your console if the file is not found or pubspec is wrong
+      }
     }
   }
 
@@ -105,6 +125,93 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     return "$hour:$minute $period";
   }
 
+  // --- NEW: Custom Ringtone Picker with Preview ---
+  void _showRingtonePicker() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        // We use a local state builder so the BottomSheet can update itself (radio buttons)
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              height: 400,
+              child: Column(
+                children: [
+                  const Text(
+                    "Select Alarm Tone",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    "Tap to preview",
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: ringtoneOptions.length,
+                      itemBuilder: (context, index) {
+                        final tone = ringtoneOptions[index];
+                        return RadioListTile<String>(
+                          title: Text(tone),
+                          value: tone,
+                          groupValue: selectedRingtone,
+                          activeColor: Colors.pinkAccent,
+                          secondary: IconButton(
+                            icon: const Icon(Icons.play_circle_fill,
+                                color: Colors.pinkAccent),
+                            onPressed: () => playRingtone(tone),
+                          ),
+                          onChanged: (value) {
+                            if (value != null) {
+                              // 1. Play sound immediately
+                              playRingtone(value);
+                              // 2. Update local state (visual radio button)
+                              setModalState(() {
+                                selectedRingtone = value;
+                              });
+                              // 3. Update parent state
+                              setState(() {
+                                selectedRingtone = value;
+                              });
+                            }
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.pinkAccent,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () {
+                        audioPlayer.stop(); // Stop sound when closing
+                        Navigator.pop(context);
+                      },
+                      child: const Text("Confirm Selection",
+                          style: TextStyle(color: Colors.white)),
+                    ),
+                  )
+                ],
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      // Ensure sound stops if user clicks outside the modal to close it
+      audioPlayer.stop();
+    });
+  }
+
   // --- Save Logic ---
   Future<void> saveMedicine() async {
     if (medicineController.text.isEmpty || selectedAlarms.isEmpty) {
@@ -121,7 +228,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
 
       final med = Medicine(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        userId: "currentUser", // Should be replaced with actual user ID logic
+        userId: "currentUser",
         name: medicineController.text,
         time: primaryTime,
         repeat: selectedRepeat,
@@ -135,11 +242,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         createdAt: DateTime.now().toIso8601String(),
       );
 
-      // Save to DB
       bool success = await medicineControllerApi.addMedicine(med);
-
-      // Schedule Notifications
-      // We pass the 'selectedRingtone' to the service so it knows what sound to play
       await NotificationService.scheduleMedicineReminder(med, selectedRingtone);
 
       if (!mounted) return;
@@ -182,7 +285,6 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
-          // Use withValues() as withOpacity is deprecated in newer Flutter versions
           BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 5)
         ],
       ),
@@ -314,20 +416,44 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
               ),
               const SizedBox(height: 15),
 
-              // 3. Dropdowns
-              _buildDropdownTile(
-                icon: Icons.music_note,
-                title: "Ringtone",
-                value: selectedRingtone,
-                items: ringtoneOptions,
-                onChanged: (v) {
-                  if (v != null) {
-                    setState(() => selectedRingtone = v);
-                    playRingtone(v);
-                  }
-                },
+              // 3. Ringtone Picker (MODIFIED)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.grey.withValues(alpha: 0.1),
+                        blurRadius: 5)
+                  ],
+                ),
+                child: ListTile(
+                  leading:
+                      const Icon(Icons.music_note, color: Colors.pinkAccent),
+                  title: const Text("Ringtone",
+                      style: TextStyle(fontSize: 14, color: Colors.grey)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        selectedRingtone,
+                        style: const TextStyle(
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      const Icon(Icons.arrow_forward_ios,
+                          size: 14, color: Colors.pinkAccent),
+                    ],
+                  ),
+                  onTap: _showRingtonePicker, // Opens the picker to hear/select
+                ),
               ),
 
+              // 4. Other Dropdowns
               _buildDropdownTile(
                 icon: Icons.repeat,
                 title: "Repeat",
@@ -352,7 +478,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                 onChanged: (v) => setState(() => selectedInstruction = v!),
               ),
 
-              // 4. Manual Inputs for Count
+              // 5. Manual Inputs for Count
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding:
@@ -379,7 +505,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
 
               const SizedBox(height: 15),
 
-              // 5. Image Picker
+              // 6. Image Picker
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -432,7 +558,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
 
               const SizedBox(height: 30),
 
-              // 6. Action Buttons
+              // 7. Action Buttons
               SizedBox(
                 width: double.infinity,
                 height: 55,

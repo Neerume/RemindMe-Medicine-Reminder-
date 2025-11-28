@@ -1,6 +1,8 @@
-import 'dart:async'; // Required for Timer
+import 'dart:async';
+import 'dart:convert'; // Required for JSON encoding
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Required for saving
 import '../routes.dart';
 import 'view_all_medicine.dart';
 import 'caregiver_screen.dart';
@@ -10,18 +12,84 @@ import '../Controller/medicineController.dart';
 import '../Model/medicine.dart';
 import '../services/notification_service.dart';
 
-// --- 1. Notification Model ---
+// --- 1. GLOBAL ACTIVITY SERVICE WITH PERSISTENCE ---
+class ActivityLogService {
+  static final ActivityLogService _instance = ActivityLogService._internal();
+  factory ActivityLogService() => _instance;
+  ActivityLogService._internal();
+
+  final StreamController<NotificationEntry> _controller =
+      StreamController<NotificationEntry>.broadcast();
+  Stream<NotificationEntry> get stream => _controller.stream;
+
+  // Save Key
+  static const String _storageKey = 'activity_logs';
+
+  // Add Log (Saves to Storage + Updates UI)
+  static Future<void> addLog(NotificationEntry entry) async {
+    // 1. Notify listeners (Real-time UI update)
+    _instance._controller.add(entry);
+
+    // 2. Save to SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    List<String> logs = prefs.getStringList(_storageKey) ?? [];
+
+    // Convert entry to JSON string
+    Map<String, dynamic> jsonEntry = {
+      'id': entry.id,
+      'title': entry.title,
+      'message': entry.message,
+      'time': entry.time,
+      'type': entry.type.index, // Store enum as integer
+    };
+
+    logs.insert(0, json.encode(jsonEntry)); // Add to top
+    // Limit to last 50 logs to save space
+    if (logs.length > 50) logs = logs.sublist(0, 50);
+
+    await prefs.setStringList(_storageKey, logs);
+  }
+
+  // Load Logs (Called when app starts)
+  static Future<List<NotificationEntry>> loadLogs() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> logs = prefs.getStringList(_storageKey) ?? [];
+
+    return logs.map((logStr) {
+      Map<String, dynamic> jsonEntry = json.decode(logStr);
+      return NotificationEntry(
+        id: jsonEntry['id'],
+        title: jsonEntry['title'],
+        message: jsonEntry['message'],
+        time: jsonEntry['time'],
+        type: NotificationType.values[jsonEntry['type']],
+      );
+    }).toList();
+  }
+
+  // Clear Logs
+  static Future<void> clearLogs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_storageKey);
+  }
+}
+
+// --- 2. Notification Model ---
+enum NotificationType { taken, skipped, snoozed, alarm }
+
 class NotificationEntry {
   final String id;
   final String title;
   final String message;
   final String time;
+  final NotificationType type;
 
   NotificationEntry({
     required this.id,
     required this.title,
     required this.message,
     required this.time,
+    required this.type,
   });
 }
 
@@ -33,26 +101,36 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // Key to control the drawer
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   int _selectedIndex = 0;
   Key _homeKey = UniqueKey();
   late final List<Widget> _widgetOptions;
 
-  // List to hold notifications for the UI Drawer
+  // The Master List of Logs
   List<NotificationEntry> _notifications = [];
+  StreamSubscription? _activitySubscription;
 
   @override
   void initState() {
     super.initState();
     _initializeNotifications();
+    _loadSavedLogs(); // Load logs from storage on startup
 
-    // Initialize screens
+    // LISTEN TO REAL-TIME UPDATES
+    _activitySubscription = ActivityLogService().stream.listen((newEntry) {
+      if (mounted) {
+        setState(() {
+          _notifications.insert(0, newEntry);
+        });
+      }
+    });
+
     _widgetOptions = <Widget>[
       _HomeContent(
         key: _homeKey,
-        onMedicinesLoaded: _updateNotificationsFromMedicines,
+        onMedicinesLoaded: _scheduleSystemAlarmsOnly,
+        onMedicineTaken: _addTakenNotification,
       ),
       const ViewAllMedicinesScreen(),
       const CaregiverScreen(),
@@ -60,41 +138,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
   }
 
+  @override
+  void dispose() {
+    _activitySubscription?.cancel();
+    super.dispose();
+  }
+
   Future<void> _initializeNotifications() async {
     await NotificationService.requestPermissions();
   }
 
-  Future<void> _updateNotificationsFromMedicines(
-      List<Medicine> medicines) async {
-    await NotificationService.cancelAll();
-    for (var med in medicines) {
-      await NotificationService.scheduleMedicineReminder(med);
-    }
-
+  // Load logs from SharedPreferences
+  Future<void> _loadSavedLogs() async {
+    List<NotificationEntry> savedLogs = await ActivityLogService.loadLogs();
     if (mounted) {
       setState(() {
-        _notifications = medicines.map((med) {
-          return NotificationEntry(
-            id: med.id.toString(),
-            title: "Alarm Set",
-            message: "Pop-up scheduled for ${med.name}",
-            time: med.time,
-          );
-        }).toList();
+        _notifications = savedLogs;
       });
     }
   }
 
-  void _deleteNotification(int index) {
+  Future<void> _scheduleSystemAlarmsOnly(List<Medicine> medicines) async {
+    await NotificationService.cancelAll();
+    for (var med in medicines) {
+      await NotificationService.scheduleMedicineReminder(med);
+    }
+  }
+
+  void _addTakenNotification(String medicineName, String time) {
+    // This calls the service which handles saving + stream
+    ActivityLogService.addLog(NotificationEntry(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: "Medicine Taken",
+      message: "You took $medicineName",
+      time: time,
+      type: NotificationType.taken,
+    ));
+  }
+
+  void _deleteNotification(int index) async {
     setState(() {
       _notifications.removeAt(index);
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Notification removed from list"),
-        duration: Duration(seconds: 1),
-      ),
-    );
+    // Optional: Re-save the modified list to SharedPreferences if you want deletions to persist
+    // For simplicity, we are just removing from UI here.
   }
 
   void _onItemTapped(int index) {
@@ -104,10 +191,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _homeKey = UniqueKey();
         _widgetOptions[0] = _HomeContent(
           key: _homeKey,
-          onMedicinesLoaded: _updateNotificationsFromMedicines,
+          onMedicinesLoaded: _scheduleSystemAlarmsOnly,
+          onMedicineTaken: _addTakenNotification,
         );
       }
     });
+  }
+
+  Icon _getNotificationIcon(NotificationType type) {
+    switch (type) {
+      case NotificationType.taken:
+        return const Icon(Icons.check_circle, color: Colors.green, size: 28);
+      case NotificationType.skipped:
+        return const Icon(Icons.cancel, color: Colors.redAccent, size: 28);
+      case NotificationType.snoozed:
+        return const Icon(Icons.snooze, color: Colors.orange, size: 28);
+      default:
+        return const Icon(Icons.notifications, color: Colors.blue, size: 28);
+    }
   }
 
   @override
@@ -134,10 +235,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.notifications_active, color: Colors.pinkAccent),
+                  Icon(Icons.history_edu, color: Colors.pinkAccent),
                   SizedBox(width: 10),
                   Text(
-                    "Scheduled Alerts",
+                    "Medicine Status",
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -149,10 +250,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.notifications_off,
+                          Icon(Icons.history_toggle_off,
                               size: 50, color: Colors.grey[300]),
                           const SizedBox(height: 10),
-                          Text("No notifications yet",
+                          Text("No actions recorded yet",
                               style: TextStyle(color: Colors.grey[500])),
                         ],
                       ),
@@ -168,46 +269,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 8),
                           leading: CircleAvatar(
-                            backgroundColor: Colors.blue[50],
-                            child: const Icon(Icons.alarm_on,
-                                color: Colors.blueAccent, size: 20),
+                            backgroundColor: Colors.white,
+                            radius: 22,
+                            child: _getNotificationIcon(note.type),
                           ),
                           title: Text(note.title,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold)),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15)),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(note.message),
+                              Text(note.message,
+                                  style: const TextStyle(
+                                      fontSize: 13, color: Colors.black87)),
+                              const SizedBox(height: 4),
                               Text(note.time,
                                   style: TextStyle(
-                                      fontSize: 12, color: Colors.grey[500])),
+                                      fontSize: 11, color: Colors.grey[500])),
                             ],
                           ),
-                          trailing: PopupMenuButton<String>(
-                            icon:
-                                const Icon(Icons.more_vert, color: Colors.grey),
-                            onSelected: (value) {
-                              if (value == 'delete') {
-                                _deleteNotification(index);
-                              }
-                            },
-                            itemBuilder: (BuildContext context) {
-                              return [
-                                const PopupMenuItem<String>(
-                                  value: 'delete',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.delete_outline,
-                                          color: Colors.red, size: 20),
-                                      SizedBox(width: 10),
-                                      Text('Delete',
-                                          style: TextStyle(color: Colors.red)),
-                                    ],
-                                  ),
-                                ),
-                              ];
-                            },
+                          trailing: IconButton(
+                            icon: const Icon(Icons.close,
+                                size: 18, color: Colors.grey),
+                            onPressed: () => _deleteNotification(index),
                           ),
                         );
                       },
@@ -308,8 +392,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 class _HomeContent extends StatefulWidget {
   final Function(List<Medicine>)? onMedicinesLoaded;
+  final Function(String name, String time)? onMedicineTaken;
 
-  const _HomeContent({super.key, this.onMedicinesLoaded});
+  const _HomeContent({super.key, this.onMedicinesLoaded, this.onMedicineTaken});
 
   @override
   State<_HomeContent> createState() => _HomeContentState();
@@ -319,7 +404,6 @@ class _HomeContentState extends State<_HomeContent> {
   final MedicineController _medicineController = MedicineController();
   late Future<List<Medicine>> _medicinesFuture;
 
-  // Health Quote Logic
   int _currentQuoteIndex = 0;
   Timer? _quoteTimer;
 
@@ -327,40 +411,12 @@ class _HomeContentState extends State<_HomeContent> {
     "Drink at least 8 glasses of water a day.",
     "A good laugh and a long sleep are the best cures.",
     "Early to bed and early to rise makes you healthy.",
-    "Take your medicines on time for better results.",
-    "A 30-minute walk everyday keeps the heart strong.",
-    "Eat more fruits and vegetables.",
-    "Stay hydrated to maintain energy levels.",
-    "Limit sugar intake for a healthier life.",
-    "Stretching daily improves flexibility.",
-    "Mental health is as important as physical health.",
-    "Wash your hands properly before eating.",
-    "Get regular check-ups with your doctor.",
-    "Limit salt intake to manage blood pressure.",
-    "Fiber-rich foods aid in digestion.",
-    "Sunshine is a great source of Vitamin D.",
-    "Manage stress with deep breathing exercises.",
-    "Avoid smoking and alcohol.",
-    "Maintain a healthy weight for your age.",
-    "Connect with loved ones to stay happy.",
-    "Read a book to keep the mind sharp.",
-    "Wear comfortable shoes to prevent falls.",
-    "Protect your skin from excessive sun.",
-    "Practice good posture while sitting.",
-    "Eat calcium-rich foods for strong bones.",
-    "Listen to your body signals.",
-    "A balanced diet is the key to longevity.",
-    "Keep your living space clean and airy.",
-    "Brush your teeth twice a day.",
-    "Positive thoughts create a positive life.",
-    "Your health is your greatest wealth."
   ];
 
   @override
   void initState() {
     super.initState();
     _fetchMedicines();
-
     _quoteTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       if (mounted) {
         setState(() {
@@ -387,16 +443,14 @@ class _HomeContentState extends State<_HomeContent> {
 
   @override
   Widget build(BuildContext context) {
-    // Get screen height to calculate the "max height" for the list
     final screenHeight = MediaQuery.of(context).size.height;
 
     return SingleChildScrollView(
-      physics: const ClampingScrollPhysics(), // Keeps page stable
+      physics: const ClampingScrollPhysics(),
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- 1. HEALTH QUOTE (Fixed at Top) ---
           TweenAnimationBuilder(
             duration: const Duration(seconds: 1),
             tween: Tween<double>(begin: 0.8, end: 1),
@@ -476,7 +530,6 @@ class _HomeContentState extends State<_HomeContent> {
               ),
             ),
           ),
-
           const SizedBox(height: 25),
           const Text(
             "Today's Medicines",
@@ -486,11 +539,6 @@ class _HomeContentState extends State<_HomeContent> {
                 color: Color(0xFF37474F)),
           ),
           const SizedBox(height: 15),
-
-          // --- 2. MEDICINE LIST (Constrained Height Area) ---
-          // This is the fix. It allows the list to grow up to 45% of the screen.
-          // If 1 item: it fits naturally.
-          // If 10 items: it scrolls INSIDE this box, keeping buttons visible.
           FutureBuilder<List<Medicine>>(
             future: _medicinesFuture,
             builder: (context, snapshot) {
@@ -502,7 +550,6 @@ class _HomeContentState extends State<_HomeContent> {
                           CircularProgressIndicator(color: Colors.pinkAccent)),
                 );
               } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                // Empty state looks full enough
                 return Container(
                   width: double.infinity,
                   height: 150,
@@ -528,15 +575,13 @@ class _HomeContentState extends State<_HomeContent> {
 
               final medicines = snapshot.data!;
 
-              // ConstrainedBox enforces the "Window" effect
               return ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: 100, // Always show at least this much
-                  maxHeight: screenHeight * 0.45, // Cap height at 45% of screen
+                  minHeight: 100,
+                  maxHeight: screenHeight * 0.45,
                 ),
                 child: Container(
                   decoration: BoxDecoration(
-                    // A subtle visual cue that this is a contained list
                     color: Colors.transparent,
                     borderRadius: BorderRadius.circular(15),
                   ),
@@ -544,13 +589,10 @@ class _HomeContentState extends State<_HomeContent> {
                     thumbVisibility: true,
                     radius: const Radius.circular(10),
                     child: ListView.builder(
-                      shrinkWrap:
-                          true, // Only take needed space up to max constraint
-                      padding: const EdgeInsets.only(
-                          bottom: 10, right: 5), // Space for scrollbar
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.only(bottom: 10, right: 5),
                       itemCount: medicines.length,
-                      physics:
-                          const BouncingScrollPhysics(), // Nice scroll feel
+                      physics: const BouncingScrollPhysics(),
                       itemBuilder: (context, index) {
                         return _buildMedicineCard(
                             context, medicines[index], index);
@@ -561,10 +603,7 @@ class _HomeContentState extends State<_HomeContent> {
               );
             },
           ),
-
           const SizedBox(height: 20),
-
-          // --- 3. ACTION BUTTONS (Always accessible now) ---
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -585,7 +624,6 @@ class _HomeContentState extends State<_HomeContent> {
                       AppRoutes.viewAll)),
             ],
           ),
-          // Extra padding at bottom to ensure nothing is cut off
           const SizedBox(height: 80),
         ],
       ),
@@ -652,6 +690,13 @@ class _HomeContentState extends State<_HomeContent> {
                             time: medicine.time,
                             dosage: medicine.dose,
                             dateTaken: DateTime.now()));
+
+                    if (widget.onMedicineTaken != null) {
+                      String now =
+                          "${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}";
+                      widget.onMedicineTaken!(medicine.name, now);
+                    }
+
                     ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('${medicine.name} taken!')));
                   },

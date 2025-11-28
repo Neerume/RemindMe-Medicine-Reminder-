@@ -10,51 +10,48 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # --- Core Flutter Icons ---
+  # --- Core Icons ---
   cupertino_icons: ^1.0.8
 
-  # --- The Libraries Your App Uses ---
+  # --- Networking & Storage ---
+  http: ^1.2.1
+  shared_preferences: ^2.2.2
+  path_provider: ^2.1.2        # Required for saving report temporary file
+
+  # --- Firebase & Notifications ---
   firebase_core: ^3.6.0
   flutter_local_notifications: ^17.2.3
   timezone: ^0.9.4
+  flutter_timezone: ^3.0.1     # Fix for Android setup
 
-  shared_preferences: ^2.3.2
-  http: ^1.2.2
-  image_picker:
+  # --- Media (Images & Audio) ---
+  image_picker: ^1.1.2
+  audioplayers: ^6.0.0
+  flutter_sound: ^9.2.13
+  gal: ^2.3.0 # Required to save report to Gallery
 
-  # --- THE FIX IS HERE ---
-  # Version 1.0.8 is too old for your Android setup.
-  # We must use 3.0.1 or higher to support Kotlin 1.9+
-  flutter_timezone: ^3.0.1
-
+  # --- Utilities ---
   intl: ^0.19.0
-  screenshot: ^3.0.0
-  flutter_sound: ^9.2.13        # For voice recording
-  permission_handler: ^11.1.0
-  audioplayers:
-  share_plus: ^10.0.0
-
-  # --- New Features (QR & Sharing) ---
+  permission_handler: ^11.3.1  # Required for gallery permissions
+  url_launcher: ^6.3.0
   qr_flutter: ^4.1.0
-  url_launcher: ^6.3.1
-  # Added for playing ringtone sounds
 
+  # --- Sharing & Screenshots ---
+  screenshot: ^3.0.0           # Required to capture the report
+  share_plus: ^10.0.0          # Required to share the report image
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
 
-  # Ensure your assets are registered here
   assets:
-    - assets/1.png
-    - assets/2.png
-    - assets/3.png
-    - assets/4.png
-    - assets/email.png
-    # - assets/icons/
     - assets/
     - assets/sounds/
+    # If you have specific files, you can list them,
+    # but 'assets/' covers everything in that folder.
+    # - assets/1.png
+    # - assets/email.png
