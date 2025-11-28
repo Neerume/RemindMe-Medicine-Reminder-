@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <!-- Critical for showing notifications on Lock Screen -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
@@ -17,13 +18,22 @@
     <!-- Hardware Permissions -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- STORAGE PERMISSIONS (Updated for Gallery Save) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!-- NEW: Required for Android 13+ to access gallery images -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
 
+    <!--
+       NEW attribute: android:requestLegacyExternalStorage="true"
+       This allows file saving on Android 10 devices.
+    -->
     <application
         android:label="RemindMe"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true">
 
         <activity
             android:name=".MainActivity"
@@ -62,7 +72,7 @@
             android:value="2" />
 
         <!--
-           2. RECEIVERS (CRUCIAL CONFIGURATION)
+           2. RECEIVERS (CRUCIAL FOR ALARMS)
         -->
 
         <!-- Handles the actual Alarm firing -->
@@ -71,7 +81,6 @@
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
 
         <!-- Handles restarting alarms after reboot -->
-        <!-- UPDATED: Set exported="true" so the OS can trigger it on boot -->
         <receiver
             android:exported="true"
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">

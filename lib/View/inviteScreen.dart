@@ -47,13 +47,23 @@ class _InviteScreenState extends State<InviteScreen> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+
+      // Wait for clear info
       await UserDataService.clearInviteInfo();
+
+      // FIXED: Added this check again because we used 'await' above.
+      // We cannot use 'context' (Navigator) after an await without checking if mounted.
+      if (!mounted) return;
 
       if (action == 'accept') {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
-            builder: (_) => const DashboardScreen(initialIndex: 2),
+            // FIXED: Removed 'initialIndex: 2' because DashboardScreen
+            // does not accept that parameter in your current code.
+            builder: (_) => const DashboardScreen(),
           ),
           (_) => false,
         );
@@ -107,7 +117,8 @@ class _InviteScreenState extends State<InviteScreen> {
               const SizedBox(height: 32),
               Card(
                 elevation: 4,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
@@ -158,7 +169,9 @@ class _InviteScreenState extends State<InviteScreen> {
                         child: Row(
                           children: [
                             Icon(
-                              isCaregiverInvite ? Icons.medical_services : Icons.favorite,
+                              isCaregiverInvite
+                                  ? Icons.medical_services
+                                  : Icons.favorite,
                               color: Colors.redAccent,
                             ),
                             const SizedBox(width: 12),
@@ -188,12 +201,14 @@ class _InviteScreenState extends State<InviteScreen> {
                   ),
                 ),
               ElevatedButton(
-                onPressed: _isProcessing ? null : () => _respondInvite('accept'),
+                onPressed:
+                    _isProcessing ? null : () => _respondInvite('accept'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.redAccent,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                 ),
                 child: _isProcessing
                     ? const SizedBox(
@@ -206,15 +221,18 @@ class _InviteScreenState extends State<InviteScreen> {
                       )
                     : const Text(
                         'Accept invite',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
                       ),
               ),
               const SizedBox(height: 12),
               OutlinedButton(
-                onPressed: _isProcessing ? null : () => _respondInvite('reject'),
+                onPressed:
+                    _isProcessing ? null : () => _respondInvite('reject'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                 ),
                 child: const Text(
                   'Reject',

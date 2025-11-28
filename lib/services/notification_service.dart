@@ -66,7 +66,7 @@ class NotificationService {
     await _notificationsPlugin.cancelAll();
   }
 
-  // --- NEW: Helper to show simple confirmation notification ---
+  // --- Helper to show simple confirmation notification ---
   static Future<void> showConfirmationNotification(
       String title, String body) async {
     const AndroidNotificationDetails androidDetails =
@@ -88,6 +88,58 @@ class NotificationService {
       body,
       details,
     );
+  }
+
+  // --- NEW: SNOOZE FUNCTION ---
+  static Future<void> scheduleSnoozeNotification(String payload,
+      {int minutes = 5}) async {
+    try {
+      // 1. Calculate time (Current time + 5 minutes)
+      final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
+      final tz.TZDateTime scheduledDate = now.add(Duration(minutes: minutes));
+
+      // 2. Configure Notification Details
+      // We use a specific channel for snoozes to ensure it rings loudly
+      const AndroidNotificationDetails androidDetails =
+          AndroidNotificationDetails(
+        'med_snooze_channel', // Channel ID
+        'Snooze Alarms', // Channel Name
+        channelDescription: 'Channel for Medicine Alarms (Snoozed)',
+        importance: Importance.max,
+        priority: Priority.high,
+        sound: RawResourceAndroidNotificationSound(
+            'tone1'), // Default sound for snooze
+        fullScreenIntent: true, // CRITICAL: Opens the AlarmScreen
+        autoCancel: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+        playSound: true,
+        visibility: NotificationVisibility.public,
+      );
+
+      const NotificationDetails details = NotificationDetails(
+        android: androidDetails,
+        iOS: DarwinNotificationDetails(
+            sound: 'tone1.wav',
+            interruptionLevel: InterruptionLevel.timeSensitive),
+      );
+
+      // 3. Schedule
+      await _notificationsPlugin.zonedSchedule(
+        DateTime.now().millisecondsSinceEpoch ~/ 1000, // Unique ID
+        'Snooze: Medicine Time!',
+        'It is time to take your medicine (Snoozed)',
+        scheduledDate,
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload:
+            payload, // Pass the same data back so the screen populates correctly
+      );
+      print("Snooze scheduled for 5 minutes from now.");
+    } catch (e) {
+      print("Error scheduling snooze: $e");
+    }
   }
 
   static Future<void> scheduleMedicineReminder(Medicine medicine,
@@ -163,7 +215,7 @@ class NotificationService {
 
       final scheduledTime = _nextInstanceOfTime(hour, minute);
 
-      // --- NEW PAYLOAD FORMAT: Name|Dose|Instruction|PhotoPath ---
+      // Payload: Name|Dose|Instruction|PhotoPath
       String payloadData =
           "${medicine.name}|${medicine.dose}|${medicine.instruction}|${medicine.photo ?? ''}";
 
