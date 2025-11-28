@@ -42,13 +42,23 @@ class NotificationService {
       settings,
       onDidReceiveNotificationResponse: (NotificationResponse details) {
         if (details.payload != null && _navigatorKey?.currentState != null) {
-          _navigatorKey!.currentState!.pushNamed(
-            '/alarm',
-            arguments: details.payload,
-          );
+          // Check if payload is an invite link
+          if (details.payload!.startsWith("http") || details.payload!.contains("invite")) {
+            _navigatorKey!.currentState!.pushNamed(
+              '/inviteScreen', // your invite screen route
+              arguments: details.payload, // pass the invite link
+            );
+          } else {
+            // Otherwise, open the medicine alarm screen
+            _navigatorKey!.currentState!.pushNamed(
+              '/alarm',
+              arguments: details.payload,
+            );
+          }
         }
       },
     );
+
   }
 
   static Future<void> requestPermissions() async {
@@ -194,4 +204,26 @@ class NotificationService {
     }
     return scheduledDate;
   }
+  // --- Show Invite Notification ---
+  static Future<void> showInviteNotification(String title, String message, String inviteLink) async {
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'invite_channel',
+      'Invite Notifications',
+      channelDescription: 'Notifications for invite links',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+    );
+
+    const NotificationDetails details = NotificationDetails(android: androidDetails);
+
+    await _notificationsPlugin.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000, // unique id
+      title,
+      message,
+      details,
+      payload: inviteLink,
+    );
+  }
+
 }

@@ -39,7 +39,7 @@ dependencies:
   # Existing dependencies
   flutter_sound: ^9.2.13        # For voice recording
   permission_handler: ^11.1.0   # For microphone & camera permission
-  app_links: ^6.4.1
+  app_links: ^3.5.1
 
 dev_dependencies:
   flutter_test:
@@ -58,4 +58,3 @@ flutter:
     - assets/email.png
     # - assets/icons/
     - assets/
-    - assets/sounds/

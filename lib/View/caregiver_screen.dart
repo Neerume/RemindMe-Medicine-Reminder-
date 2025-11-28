@@ -106,13 +106,13 @@ class _CaregiverScreenState extends State<CaregiverScreen>
       inviterName: displayName,
     );
 
-    caregiverShareLink = RelationshipService.buildDeepLink(
+    caregiverShareLink = RelationshipService.buildHostedInviteLink(
       role: 'caregiver',
       inviterId: userId!,
       inviterName: displayName,
     );
 
-    patientShareLink = RelationshipService.buildDeepLink(
+    patientShareLink = RelationshipService.buildHostedInviteLink(
       role: 'patient',
       inviterId: userId!,
       inviterName: displayName,
@@ -475,14 +475,18 @@ class _CaregiverScreenState extends State<CaregiverScreen>
 
                   // Copy Link Field
                   InkWell(
-                    onTap: () async {
-                      if (await canLaunchUrl(Uri.parse(displayLink))) {
-                        await launchUrl(Uri.parse(displayLink),
-                            mode: LaunchMode.externalApplication);
-                      } else {
-                        await Share.share(displayLink);
-                      }
-                    },
+                      onTap: () async {
+                        await Clipboard.setData(ClipboardData(text: displayLink));
+
+                        if (!mounted) return;
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Link copied to clipboard!"),
+                            duration: Duration(seconds: 1),
+                          ),
+                        );
+                      },
                       child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 14),

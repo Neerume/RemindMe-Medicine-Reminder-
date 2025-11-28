@@ -52,10 +52,8 @@ class _InviteScreenState extends State<InviteScreen> {
 
       if (action == 'accept') {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (_) => const DashboardScreen(initialIndex: 2),
-          ),
-          (_) => false,
+          MaterialPageRoute(builder: (_) => const DashboardScreen(initialIndex: 2)),
+              (_) => false,
         );
       } else {
         Navigator.of(context).pop();
@@ -70,7 +68,14 @@ class _InviteScreenState extends State<InviteScreen> {
       }
     }
   }
-
+  Future<void> _skipInvite() async {
+    await UserDataService.clearInviteInfo();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const DashboardScreen(initialIndex: 0)),
+          (_) => false,
+    );
+  }
   @override
   Widget build(BuildContext context) {
     final isCaregiverInvite = widget.role == 'caregiver';
@@ -221,6 +226,19 @@ class _InviteScreenState extends State<InviteScreen> {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: _isProcessing ? null : _skipInvite,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: const Text(
+                  'Skip for now',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ),
+
               const Spacer(),
               const Text(
                 'Need someone else to help? Share your link from the caregiver tab anytime.',
