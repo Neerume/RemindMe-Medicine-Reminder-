@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
+// ✅ IMPORT THE NEW SERVICE FILE
+import '../services/activity_log_service.dart';
 
 class AlarmScreen extends StatefulWidget {
   const AlarmScreen({super.key});
@@ -15,6 +17,9 @@ class _AlarmScreenState extends State<AlarmScreen> {
   String currentTime = "";
   String currentDate = "";
 
+  // Scroll Controller
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -23,36 +28,65 @@ class _AlarmScreenState extends State<AlarmScreen> {
     currentDate = DateFormat('EEEE, MMMM d').format(now);
   }
 
-  void _handleAction(String action, String medicineName) async {
-    // 1. Stop Sound
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _handleAction(String action, String medicineName, String payload) async {
+    // Stop the ringing
     await NotificationService.cancelAll();
 
-    // 2. Notification Feedback
     String title = "";
     String body = "";
+    final now = DateTime.now();
+    String timeStr = "${now.hour}:${now.minute.toString().padLeft(2, '0')}";
 
-    if (action == "Taken") {
+    if (action == "Snooze") {
+      await NotificationService.scheduleSnoozeNotification(payload, minutes: 5);
+
+      // ✅ NO MORE ERRORS HERE
+      ActivityLogService.addLog(NotificationEntry(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: "Alarm Snoozed",
+        message: "Snoozed $medicineName for 5 min",
+        time: timeStr,
+        type: NotificationType.snoozed,
+      ));
+
+      title = "Snoozed 💤";
+      body = "Alarm will ring again in 5 minutes.";
+    } else if (action == "Taken") {
       title = "Great Job! 🎉";
       body = "Marked $medicineName as taken.";
+
+      ActivityLogService.addLog(NotificationEntry(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: "Medicine Taken",
+        message: "You took $medicineName",
+        time: timeStr,
+        type: NotificationType.taken,
+      ));
     } else if (action == "Skip") {
       title = "Skipped ⚠️";
       body = "You skipped $medicineName.";
-    } else if (action == "Snooze") {
-      title = "Snoozed 💤";
-      body = "Alarm snoozed for $medicineName.";
+
+      ActivityLogService.addLog(NotificationEntry(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: "Medicine Skipped",
+        message: "You skipped $medicineName",
+        time: timeStr,
+        type: NotificationType.skipped,
+      ));
     }
 
-    if (action != "Snooze") {
-      await NotificationService.showConfirmationNotification(title, body);
-    }
-
-    // 3. Close App
+    await NotificationService.showConfirmationNotification(title, body);
     SystemNavigator.pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Decode Payload
     final String payload =
         ModalRoute.of(context)?.settings.arguments as String? ?? "Medicine|||";
     final List<String> parts = payload.split('|');
@@ -62,25 +96,23 @@ class _AlarmScreenState extends State<AlarmScreen> {
     final String instruction = parts.length > 2 ? parts[2] : "Take medicine";
     final String imagePath = parts.length > 3 ? parts[3] : "";
 
-    // Screen Size Helper
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          // Prevents overflow on small screens
+          controller: _scrollController,
           child: Container(
             height: size.height - MediaQuery.of(context).padding.top,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             child: Column(
               children: [
                 const SizedBox(height: 10),
-                // --- TOP: TIME & DATE ---
                 Text(
                   currentTime,
                   style: const TextStyle(
-                    fontSize: 55, // Slightly smaller to save space
+                    fontSize: 55,
                     fontWeight: FontWeight.w400,
                     color: Colors.black87,
                     height: 1.0,
@@ -96,18 +128,17 @@ class _AlarmScreenState extends State<AlarmScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // --- MAIN CARD ---
                 Expanded(
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 20, vertical: 25),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE8EAF6), // Lavender background
+                      color: const Color(0xFFE8EAF6),
                       borderRadius: BorderRadius.circular(35),
                       boxShadow: [
                         BoxShadow(
+                          // ✅ FIXED DEPRECATION WARNING
                           color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
@@ -117,7 +148,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // 1. Header
                         const Text(
                           "Medicine time",
                           style: TextStyle(
@@ -126,8 +156,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-
-                        // 2. Photo Circle
                         Container(
                           height: 140,
                           width: 140,
@@ -137,6 +165,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                             border: Border.all(color: Colors.white, width: 4),
                             boxShadow: [
                               BoxShadow(
+                                // ✅ FIXED DEPRECATION WARNING
                                 color: Colors.black.withValues(alpha: 0.1),
                                 blurRadius: 15,
                                 offset: const Offset(0, 8),
@@ -151,8 +180,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
                                     size: 60, color: Colors.grey),
                           ),
                         ),
-
-                        // 3. Info Section
                         Column(
                           children: [
                             Text(
@@ -161,7 +188,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                               style: const TextStyle(
                                 fontSize: 26,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF5C6BC0), // Indigo shade
+                                color: Color(0xFF5C6BC0),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -200,13 +227,9 @@ class _AlarmScreenState extends State<AlarmScreen> {
                             ),
                           ],
                         ),
-
                         const SizedBox(height: 10),
-
-                        // 4. Buttons
                         Column(
                           children: [
-                            // Snooze
                             SizedBox(
                               width: 150,
                               height: 45,
@@ -218,32 +241,30 @@ class _AlarmScreenState extends State<AlarmScreen> {
                                     borderRadius: BorderRadius.circular(25),
                                   ),
                                 ),
-                                onPressed: () =>
-                                    _handleAction("Snooze", medicineName),
-                                child: const Text("Snooze",
+                                onPressed: () => _handleAction(
+                                    "Snooze", medicineName, payload),
+                                child: const Text("Snooze 5m",
                                     style: TextStyle(
                                         color: Colors.white, fontSize: 16)),
                               ),
                             ),
                             const SizedBox(height: 20),
-
-                            // Skip & Taken Row
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 _buildActionButton(
                                   label: "Skip",
-                                  color: const Color(0xFFE1BEE7), // Light Pink
+                                  color: const Color(0xFFE1BEE7),
                                   textColor: Colors.black87,
-                                  onTap: () =>
-                                      _handleAction("Skip", medicineName),
+                                  onTap: () => _handleAction(
+                                      "Skip", medicineName, payload),
                                 ),
                                 _buildActionButton(
                                   label: "Taken",
-                                  color: const Color(0xFF69F0AE), // Green
+                                  color: const Color(0xFF69F0AE),
                                   textColor: Colors.black87,
-                                  onTap: () =>
-                                      _handleAction("Taken", medicineName),
+                                  onTap: () => _handleAction(
+                                      "Taken", medicineName, payload),
                                 ),
                               ],
                             ),
