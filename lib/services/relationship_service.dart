@@ -75,6 +75,7 @@ class RelationshipService {
     required String action, // 'accept' or 'reject'
   }) async {
     final token = await UserDataService.getToken();
+<<<<<<< Updated upstream
     final url = Uri.parse(ApiConfig.respondInvite);
 
     // Define the body first
@@ -87,6 +88,24 @@ class RelationshipService {
 
     print("Sending POST to $url");
     print("Body: $body");
+=======
+
+    final url = Uri.parse(ApiConfig.respondInvite);
+
+    // Ensure IDs are trimmed strings
+    final requestBody = {
+      'inviterId': inviterId.trim(),
+      'inviteeId': inviteeId.trim(),
+      'type': type.trim(),
+      'action': action.trim(),
+    };
+
+    final bodyEncoded = jsonEncode(requestBody);
+
+    // DEBUG
+    debugPrint("🚀 Sending POST to: $url");
+    debugPrint("📦 Payload: $bodyEncoded");
+>>>>>>> Stashed changes
 
     final response = await http.post(
       url,
@@ -115,6 +134,7 @@ class RelationshipService {
       String userId) async {
     final token = await UserDataService.getToken();
     final url = Uri.parse(ApiConfig.getCaregivers);
+
     final response = await http.get(
       url,
       headers: {
@@ -137,6 +157,7 @@ class RelationshipService {
       String userId) async {
     final token = await UserDataService.getToken();
     final url = Uri.parse(ApiConfig.getPatients);
+
     final response = await http.get(
       url,
       headers: {
@@ -161,7 +182,7 @@ class RelationshipService {
   }) async {
     final token = await UserDataService.getToken();
     final url =
-        Uri.parse('${ApiConfig.inviteCaregiver}/$inviterId?userId=$inviteeId');
+    Uri.parse('${ApiConfig.inviteCaregiver}/$inviterId?userId=$inviteeId');
 
     final response = await http.post(
       url,
@@ -190,7 +211,7 @@ class RelationshipService {
   }) async {
     final token = await UserDataService.getToken();
     final url =
-        Uri.parse('${ApiConfig.invitePatient}/$inviterId?userId=$inviteeId');
+    Uri.parse('${ApiConfig.invitePatient}/$inviterId?userId=$inviteeId');
 
     final response = await http.post(
       url,
