@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../Model/relationship_connection.dart';
 import '../config/api.dart';
+import 'user_data_service.dart';
 
 class RelationshipService {
   // Deep link configuration
@@ -73,6 +74,7 @@ class RelationshipService {
     required String type,
     required String action, // 'accept' or 'reject'
   }) async {
+    final token = await UserDataService.getToken();
     final url = Uri.parse(ApiConfig.respondInvite);
 
     // Define the body first
@@ -88,7 +90,10 @@ class RelationshipService {
 
     final response = await http.post(
       url,
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
       body: body,
     );
 
@@ -106,8 +111,15 @@ class RelationshipService {
 
   /// Fetch caregivers
   static Future<List<RelationshipConnection>> fetchCaregivers(String userId) async {
+    final token = await UserDataService.getToken();
     final url = Uri.parse(ApiConfig.getCaregivers);
-    final response = await http.get(url);
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
 
     if (response.statusCode == 200) {
       final List data = jsonDecode(response.body);
@@ -118,8 +130,15 @@ class RelationshipService {
 
   /// Fetch patients
   static Future<List<RelationshipConnection>> fetchPatients(String userId) async {
+    final token = await UserDataService.getToken();
     final url = Uri.parse(ApiConfig.getPatients);
-    final response = await http.get(url);
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
 
     if (response.statusCode == 200) {
       final List data = jsonDecode(response.body);

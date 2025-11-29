@@ -229,9 +229,9 @@ class NotificationService {
 
       final scheduledTime = _nextInstanceOfTime(hour, minute);
 
-      // Payload: Name|Dose|Instruction|PhotoPath
+      // Payload: Name|Dose|Instruction|PhotoPath|MedicineId
       String payloadData =
-          "${medicine.name}|${medicine.dose}|${medicine.instruction}|${medicine.photo ?? ''}";
+          "${medicine.name}|${medicine.dose}|${medicine.instruction}|${medicine.photo ?? ''}|${medicine.id ?? ''}";
 
       await _notificationsPlugin.zonedSchedule(
         medicine.id.hashCode,

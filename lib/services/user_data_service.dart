@@ -1,7 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class UserDataService {
-  static const String _keyUsername = 'user_username';
+    static const String _keyUsername = 'user_username';
   static const String _keyToken = 'user_token';
   static const String _keyPhone = 'user_phone';
   static const String _keyUserId = 'user_id';

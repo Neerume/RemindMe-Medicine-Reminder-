@@ -24,5 +24,8 @@
         static const String getPatients = "$baseUrl/api/relationship/patients";
         static const String deleteRelation = "$baseUrl/api/relationship/delete";
 
+        // Medicine log & report endpoints
+        static const String logAction = "$baseUrl/api/medicine/action"; // log Taken/Skipped
+        static const String getReport = "$baseUrl/api/medicine/report";         // generate/get report
 
       }

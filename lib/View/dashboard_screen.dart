@@ -5,11 +5,20 @@ import '../routes.dart';
 import 'view_all_medicine.dart';
 import 'caregiver_screen.dart';
 import 'profile_screen.dart';
+import 'invite_Screen.dart';
 import '../services/medicine_history_service.dart';
 import '../Controller/medicineController.dart';
 import '../Model/medicine.dart';
+import '../Model/invite_info.dart';
 import '../services/notification_service.dart';
+<<<<<<< Updated upstream
 import '../services/activity_log_service.dart';
+=======
+import '../services/invite_notification_service.dart';
+import '../services/refill_alert_service.dart';
+import '../services/report_service.dart';
+
+>>>>>>> Stashed changes
 
 // --- 1. Notification Model ---
 class NotificationEntry {
@@ -17,12 +26,16 @@ class NotificationEntry {
   final String title;
   final String message;
   final String time;
+  final String type; // 'medicine', 'invite', or 'refill'
+  final InviteInfo? inviteInfo; // For invite notifications
 
   NotificationEntry({
     required this.id,
     required this.title,
     required this.message,
     required this.time,
+    this.type = 'medicine',
+    this.inviteInfo,
   });
 }
 
@@ -48,6 +61,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _initializeNotifications();
+    _loadPendingInvites();
 
     // Initialize screens
     _widgetOptions = <Widget>[
@@ -61,8 +75,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload invites when screen becomes visible again
+    _loadPendingInvites();
+  }
+
   Future<void> _initializeNotifications() async {
     await NotificationService.requestPermissions();
+  }
+
+  Future<void> _loadPendingInvites() async {
+    final pendingInvites = await InviteNotificationService.getPendingInvites();
+    if (!mounted) return;
+    
+    setState(() {
+      // Remove old invite notifications
+      _notifications.removeWhere((n) => n.type == 'invite');
+      
+      // Add new invite notifications
+      for (var invite in pendingInvites) {
+        final inviterName = invite.inviterName ?? 'Someone';
+        final roleText = invite.role == 'caregiver' ? 'caregiver' : 'patient';
+        _notifications.insert(0, NotificationEntry(
+          id: 'invite_${invite.inviterId}_${invite.role}',
+          title: 'Connection Invitation',
+          message: '$inviterName wants to connect as $roleText',
+          time: 'Pending',
+          type: 'invite',
+          inviteInfo: invite,
+        ));
+      }
+    });
   }
 
   Future<void> _updateNotificationsFromMedicines(
@@ -74,14 +119,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (mounted) {
       setState(() {
-        _notifications = medicines.map((med) {
+        // Medicine reminder notifications
+        final medicineNotifications = medicines.map((med) {
           return NotificationEntry(
             id: med.id.toString(),
             title: "Alarm Set",
             message: "Pop-up scheduled for ${med.name}",
             time: med.time,
+            type: 'medicine',
           );
         }).toList();
+
+        // Refill alert notifications
+        final refillNotifications = medicines
+            .where((med) => RefillAlertService.needsRefill(med))
+            .map((med) {
+          final daysRemaining = RefillAlertService.getDaysRemaining(med);
+          final urgency = RefillAlertService.getRefillUrgency(med);
+          
+          String title;
+          if (daysRemaining <= 0) {
+            title = '⚠️ Refill Needed Now';
+          } else if (urgency == 'urgent') {
+            title = '🔴 Urgent: Refill Needed';
+          } else {
+            title = '🟡 Refill Reminder';
+          }
+          
+          return NotificationEntry(
+            id: 'refill_${med.id}',
+            title: title,
+            message: '${med.name} - ${daysRemaining <= 0 ? "Out of stock" : "$daysRemaining day${daysRemaining == 1 ? '' : 's'} remaining"}',
+            time: 'Refill Alert',
+            type: 'refill',
+          );
+        }).toList();
+
+        // Combine all notifications (refill alerts first, then medicine reminders)
+        _notifications = [...refillNotifications, ...medicineNotifications];
       });
     }
   }
@@ -109,6 +184,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
       }
     });
+    // Reload invites when switching tabs
+    _loadPendingInvites();
   }
 
   @override
@@ -165,13 +242,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           const Divider(height: 1),
                       itemBuilder: (context, index) {
                         final note = _notifications[index];
+                        final isInvite = note.type == 'invite';
+                        final isRefill = note.type == 'refill';
+                        
+                        // Determine icon and color based on notification type
+                        IconData icon;
+                        Color? backgroundColor;
+                        Color? iconColor;
+                        
+                        if (isInvite) {
+                          icon = Icons.person_add_alt_1;
+                          backgroundColor = Colors.pink[50];
+                          iconColor = Colors.pinkAccent;
+                        } else if (isRefill) {
+                          icon = Icons.warning_amber_rounded;
+                          backgroundColor = Colors.orange[50];
+                          iconColor = Colors.orange[700];
+                        } else {
+                          icon = Icons.alarm_on;
+                          backgroundColor = Colors.blue[50];
+                          iconColor = Colors.blueAccent;
+                        }
+                        
                         return ListTile(
                           contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 8),
                           leading: CircleAvatar(
-                            backgroundColor: Colors.blue[50],
-                            child: const Icon(Icons.alarm_on,
-                                color: Colors.blueAccent, size: 20),
+                            backgroundColor: backgroundColor,
+                            child: Icon(
+                              icon,
+                              color: iconColor,
+                              size: 20,
+                            ),
                           ),
                           title: Text(note.title,
                               style:
@@ -185,11 +287,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       fontSize: 12, color: Colors.grey[500])),
                             ],
                           ),
+                          onTap: isInvite ? () {
+                            // Open invite screen when invite notification is tapped
+                            if (note.inviteInfo != null) {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => InviteScreen(
+                                    inviterId: note.inviteInfo!.inviterId,
+                                    role: note.inviteInfo!.role,
+                                    inviterName: note.inviteInfo!.inviterName,
+                                  ),
+                                ),
+                              ).then((_) {
+                                // Reload invites after returning from invite screen
+                                _loadPendingInvites();
+                              });
+                            }
+                          } : isRefill ? () {
+                            // Navigate to medicines tab when refill notification is tapped
+                            _onItemTapped(1); // Index 1 is ViewAllMedicinesScreen
+                          } : null,
                           trailing: PopupMenuButton<String>(
                             icon:
                                 const Icon(Icons.more_vert, color: Colors.grey),
                             onSelected: (value) {
                               if (value == 'delete') {
+                                if (isInvite && note.inviteInfo != null) {
+                                  // Remove from pending invites
+                                  InviteNotificationService.removePendingInvite(
+                                    note.inviteInfo!.inviterId,
+                                    note.inviteInfo!.role,
+                                  );
+                                }
                                 _deleteNotification(index);
                               }
                             },
@@ -361,6 +490,7 @@ class _HomeContentState extends State<_HomeContent> {
   void initState() {
     super.initState();
     _fetchMedicines();
+
 
     _quoteTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       if (mounted) {

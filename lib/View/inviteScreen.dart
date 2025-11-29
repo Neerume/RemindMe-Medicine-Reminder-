@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../services/relationship_service.dart';
 import '../services/user_data_service.dart';
+import '../services/invite_notification_service.dart';
+import '../Model/invite_info.dart';
 import 'dashboard_screen.dart';
 
 class InviteScreen extends StatefulWidget {
@@ -51,6 +53,12 @@ class _InviteScreenState extends State<InviteScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
 
+      // Remove from pending invites
+      await InviteNotificationService.removePendingInvite(
+        widget.inviterId,
+        widget.role,
+      );
+
       // Wait for clear info
       await UserDataService.clearInviteInfo();
 
@@ -77,8 +85,21 @@ class _InviteScreenState extends State<InviteScreen> {
     }
   }
   Future<void> _skipInvite() async {
+    // Save invite to pending invites for later
+    await InviteNotificationService.addPendingInvite(
+      InviteInfo(
+        inviterId: widget.inviterId,
+        role: widget.role,
+        inviterName: widget.inviterName,
+      ),
+    );
+
+    // Clear current invite info
     await UserDataService.clearInviteInfo();
+    
     if (!mounted) return;
+    
+    // Navigate back to dashboard
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const DashboardScreen(initialIndex: 0)),
           (_) => false,
