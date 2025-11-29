@@ -1,70 +1,52 @@
-import 'dart:async'; // Required for Timer
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+
+// --- Imports ---
 import '../routes.dart';
-import 'invite_Screen.dart';
 import 'view_all_medicine.dart';
 import 'caregiver_screen.dart';
 import 'profile_screen.dart';
 import '../services/medicine_history_service.dart';
 import '../Controller/medicineController.dart';
 import '../Model/medicine.dart';
-import '../Model/invite_info.dart';
 import '../services/notification_service.dart';
+// IMPORANT: This imports the shared model we just created
 import '../services/activity_log_service.dart';
-import '../services/invite_notification_service.dart';
-import '../services/refill_alert_service.dart';
-import '../services/report_service.dart';
-
-// --- 1. Notification Model ---
-class NotificationEntry {
-  final String id;
-  final String title;
-  final String message;
-  final String time;
-  final String type; // 'medicine', 'invite', or 'refill'
-  final InviteInfo? inviteInfo; // For invite notifications
-
-  NotificationEntry({
-    required this.id,
-    required this.title,
-    required this.message,
-    required this.time,
-    this.type = 'medicine',
-    this.inviteInfo,
-  });
-}
 
 class DashboardScreen extends StatefulWidget {
-  final int initialIndex; // Add this
+  final int initialIndex;
 
-  const DashboardScreen({super.key, this.initialIndex = 0});
+  const DashboardScreen({
+    super.key,
+    this.initialIndex = 0,
+  });
+
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // Key to control the drawer
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   int _selectedIndex = 0;
   Key _homeKey = UniqueKey();
   late final List<Widget> _widgetOptions;
 
-  // List to hold notifications for the UI Drawer
+  // This list now uses the Shared Model from the Service
   List<NotificationEntry> _notifications = [];
 
   @override
   void initState() {
     super.initState();
+    _selectedIndex = widget.initialIndex;
     _initializeNotifications();
-    _loadPendingInvites();
 
-    // Initialize screens
     _widgetOptions = <Widget>[
       _HomeContent(
         key: _homeKey,
-        onMedicinesLoaded: _updateNotificationsFromMedicines,
+        onMedicineAction: _handleMedicineAction,
+        onMedicinesLoaded: _updateData,
       ),
       const ViewAllMedicinesScreen(),
       const CaregiverScreen(),
@@ -72,91 +54,79 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Reload invites when screen becomes visible again
-    _loadPendingInvites();
-  }
-
   Future<void> _initializeNotifications() async {
     await NotificationService.requestPermissions();
   }
 
-  Future<void> _loadPendingInvites() async {
-    final pendingInvites = await InviteNotificationService.getPendingInvites();
-    if (!mounted) return;
+  // --- DATA LOADING LOGIC ---
 
-    setState(() {
-      // Remove old invite notifications
-      _notifications.removeWhere((n) => n.type == 'invite');
-
-      // Add new invite notifications
-      for (var invite in pendingInvites) {
-        final inviterName = invite.inviterName ?? 'Someone';
-        final roleText = invite.role == 'caregiver' ? 'caregiver' : 'patient';
-        _notifications.insert(
-            0,
-            NotificationEntry(
-              id: 'invite_${invite.inviterId}_${invite.role}',
-              title: 'Connection Invitation',
-              message: '$inviterName wants to connect as $roleText',
-              time: 'Pending',
-              type: 'invite',
-              inviteInfo: invite,
-            ));
-      }
-    });
-  }
-
-  Future<void> _updateNotificationsFromMedicines(
-      List<Medicine> medicines) async {
+  Future<void> _updateData(List<Medicine> medicines) async {
+    // 1. Re-schedule alarms
     await NotificationService.cancelAll();
     for (var med in medicines) {
       await NotificationService.scheduleMedicineReminder(med);
     }
 
+    List<NotificationEntry> tempList = [];
+
+    // 2. LOAD HISTORY (Taken/Skipped/Snoozed) from the Service
+    try {
+      final historyLogs = await ActivityLogService.getLogs();
+      tempList.addAll(historyLogs);
+    } catch (e) {
+      debugPrint("Error loading history: $e");
+    }
+
+    // 3. ADD SCHEDULED ALARMS
+    // Create temporary entries for upcoming scheduled medicines
+    for (var med in medicines) {
+      tempList.add(NotificationEntry(
+        id: "sched_${med.id}",
+        title: "Scheduled",
+        message: "Reminder for ${med.name}",
+        time: med.time,
+        type: NotificationType.scheduled,
+      ));
+    }
+
     if (mounted) {
       setState(() {
-        // Medicine reminder notifications
-        final medicineNotifications = medicines.map((med) {
-          return NotificationEntry(
-            id: med.id.toString(),
-            title: "Alarm Set",
-            message: "Pop-up scheduled for ${med.name}",
-            time: med.time,
-            type: 'medicine',
-          );
-        }).toList();
+        _notifications = tempList;
+      });
+    }
+  }
 
-        // Refill alert notifications
-        final refillNotifications = medicines
-            .where((med) => RefillAlertService.needsRefill(med))
-            .map((med) {
-          final daysRemaining = RefillAlertService.getDaysRemaining(med);
-          final urgency = RefillAlertService.getRefillUrgency(med);
+  // --- IMMEDIATE UI UPDATE (When clicking buttons on Home) ---
+  void _handleMedicineAction(
+      String actionType, String medicineName, String time) async {
+    NotificationType type = NotificationType.taken;
+    String title = "Medicine Taken";
+    String message = "You took $medicineName";
 
-          String title;
-          if (daysRemaining <= 0) {
-            title = '⚠️ Refill Needed Now';
-          } else if (urgency == 'urgent') {
-            title = '🔴 Urgent: Refill Needed';
-          } else {
-            title = '🟡 Refill Reminder';
-          }
+    if (actionType.toLowerCase() == "skipped") {
+      type = NotificationType.skipped;
+      title = "Medicine Skipped";
+      message = "You skipped $medicineName";
+    } else if (actionType.toLowerCase() == "snoozed") {
+      type = NotificationType.snoozed;
+      title = "Alarm Snoozed";
+      message = "Snoozed $medicineName";
+    }
 
-          return NotificationEntry(
-            id: 'refill_${med.id}',
-            title: title,
-            message:
-                '${med.name} - ${daysRemaining <= 0 ? "Out of stock" : "$daysRemaining day${daysRemaining == 1 ? '' : 's'} remaining"}',
-            time: 'Refill Alert',
-            type: 'refill',
-          );
-        }).toList();
+    final newEntry = NotificationEntry(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: title,
+      message: message,
+      time: time,
+      type: type,
+    );
 
-        // Combine all notifications (refill alerts first, then medicine reminders)
-        _notifications = [...refillNotifications, ...medicineNotifications];
+    // Save to Service so it persists
+    await ActivityLogService.addLog(newEntry);
+
+    if (mounted) {
+      setState(() {
+        _notifications.insert(0, newEntry);
       });
     }
   }
@@ -165,12 +135,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() {
       _notifications.removeAt(index);
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Notification removed from list"),
-        duration: Duration(seconds: 1),
-      ),
-    );
   }
 
   void _onItemTapped(int index) {
@@ -180,12 +144,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _homeKey = UniqueKey();
         _widgetOptions[0] = _HomeContent(
           key: _homeKey,
-          onMedicinesLoaded: _updateNotificationsFromMedicines,
+          onMedicineAction: _handleMedicineAction,
+          onMedicinesLoaded: _updateData,
         );
       }
     });
-    // Reload invites when switching tabs
-    _loadPendingInvites();
   }
 
   @override
@@ -194,7 +157,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       key: _scaffoldKey,
-      extendBodyBehindAppBar: false,
+      // --- DRAWER UI (Matches Screenshot) ---
       endDrawer: Drawer(
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.only(
@@ -212,10 +175,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.notifications_active, color: Colors.pinkAccent),
+                  Icon(Icons.medication_liquid, color: Colors.pinkAccent),
                   SizedBox(width: 10),
                   Text(
-                    "Scheduled Alerts",
+                    "Medicine Status",
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -230,7 +193,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Icon(Icons.notifications_off,
                               size: 50, color: Colors.grey[300]),
                           const SizedBox(height: 10),
-                          Text("No notifications yet",
+                          Text("No activity yet",
                               style: TextStyle(color: Colors.grey[500])),
                         ],
                       ),
@@ -239,113 +202,87 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       padding: EdgeInsets.zero,
                       itemCount: _notifications.length,
                       separatorBuilder: (context, index) =>
-                          const Divider(height: 1),
+                          const Divider(height: 1, color: Colors.black12),
                       itemBuilder: (context, index) {
                         final note = _notifications[index];
-                        final isInvite = note.type == 'invite';
-                        final isRefill = note.type == 'refill';
 
-                        // Determine icon and color based on notification type
+                        // --- ICON & COLOR LOGIC (Exact match for screenshot) ---
                         IconData icon;
-                        Color? backgroundColor;
-                        Color? iconColor;
+                        Color iconColor;
+                        Color circleColor;
 
-                        if (isInvite) {
-                          icon = Icons.person_add_alt_1;
-                          backgroundColor = Colors.pink[50];
-                          iconColor = Colors.pinkAccent;
-                        } else if (isRefill) {
-                          icon = Icons.warning_amber_rounded;
-                          backgroundColor = Colors.orange[50];
-                          iconColor = Colors.orange[700];
+                        switch (note.type) {
+                          case NotificationType.taken:
+                            icon = Icons.check;
+                            iconColor = Colors.white;
+                            circleColor = Colors.green; // Green Circle
+                            break;
+                          case NotificationType.skipped:
+                            icon = Icons.close;
+                            iconColor = Colors.white;
+                            circleColor = Colors.redAccent; // Red Circle
+                            break;
+                          case NotificationType.snoozed:
+                            icon = Icons.snooze;
+                            iconColor = Colors.orange;
+                            circleColor = Colors.white;
+                            break;
+                          case NotificationType.scheduled:
+                          default:
+                            icon = Icons.alarm;
+                            iconColor = Colors.blue;
+                            circleColor = Colors.blue.withOpacity(0.1);
+                            break;
+                        }
+
+                        // Build the leading widget
+                        Widget leadingIcon;
+                        if (note.type == NotificationType.snoozed) {
+                          // Special style for Snoozed (Orange icon, white bg)
+                          leadingIcon = Container(
+                            width: 45,
+                            height: 45,
+                            decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white,
+                                border: Border.all(
+                                    color: Colors.orange.withOpacity(0.3),
+                                    width: 2)),
+                            child: Icon(icon, color: iconColor, size: 24),
+                          );
                         } else {
-                          icon = Icons.alarm_on;
-                          backgroundColor = Colors.blue[50];
-                          iconColor = Colors.blueAccent;
+                          // Standard style (Filled circle)
+                          leadingIcon = CircleAvatar(
+                            backgroundColor: circleColor,
+                            radius: 22,
+                            child: Icon(icon, color: iconColor, size: 24),
+                          );
                         }
 
                         return ListTile(
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          leading: CircleAvatar(
-                            backgroundColor: backgroundColor,
-                            child: Icon(
-                              icon,
-                              color: iconColor,
-                              size: 20,
-                            ),
-                          ),
+                              horizontal: 16, vertical: 12),
+                          leading: leadingIcon,
                           title: Text(note.title,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold)),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 16)),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(note.message),
+                              const SizedBox(height: 4),
+                              Text(note.message,
+                                  style:
+                                      const TextStyle(color: Colors.black87)),
+                              const SizedBox(height: 4),
                               Text(note.time,
                                   style: TextStyle(
                                       fontSize: 12, color: Colors.grey[500])),
                             ],
                           ),
-                          onTap: isInvite
-                              ? () {
-                                  // Open invite screen when invite notification is tapped
-                                  if (note.inviteInfo != null) {
-                                    Navigator.of(context)
-                                        .push(
-                                      MaterialPageRoute(
-                                        builder: (_) => InviteScreen(
-                                          inviterId: note.inviteInfo!.inviterId,
-                                          role: note.inviteInfo!.role,
-                                          inviterName:
-                                              note.inviteInfo!.inviterName,
-                                        ),
-                                      ),
-                                    )
-                                        .then((_) {
-                                      // Reload invites after returning from invite screen
-                                      _loadPendingInvites();
-                                    });
-                                  }
-                                }
-                              : isRefill
-                                  ? () {
-                                      // Navigate to medicines tab when refill notification is tapped
-                                      _onItemTapped(
-                                          1); // Index 1 is ViewAllMedicinesScreen
-                                    }
-                                  : null,
-                          trailing: PopupMenuButton<String>(
-                            icon:
-                                const Icon(Icons.more_vert, color: Colors.grey),
-                            onSelected: (value) {
-                              if (value == 'delete') {
-                                if (isInvite && note.inviteInfo != null) {
-                                  // Remove from pending invites
-                                  InviteNotificationService.removePendingInvite(
-                                    note.inviteInfo!.inviterId,
-                                    note.inviteInfo!.role,
-                                  );
-                                }
-                                _deleteNotification(index);
-                              }
-                            },
-                            itemBuilder: (BuildContext context) {
-                              return [
-                                const PopupMenuItem<String>(
-                                  value: 'delete',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.delete_outline,
-                                          color: Colors.red, size: 20),
-                                      SizedBox(width: 10),
-                                      Text('Delete',
-                                          style: TextStyle(color: Colors.red)),
-                                    ],
-                                  ),
-                                ),
-                              ];
-                            },
+                          trailing: IconButton(
+                            icon: const Icon(Icons.close,
+                                size: 20, color: Colors.grey),
+                            onPressed: () => _deleteNotification(index),
                           ),
                         );
                       },
@@ -446,8 +383,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 class _HomeContent extends StatefulWidget {
   final Function(List<Medicine>)? onMedicinesLoaded;
+  // Callback to update drawer from Home
+  final Function(String action, String medicineName, String time)?
+      onMedicineAction;
 
-  const _HomeContent({super.key, this.onMedicinesLoaded});
+  const _HomeContent(
+      {super.key, this.onMedicinesLoaded, this.onMedicineAction});
 
   @override
   State<_HomeContent> createState() => _HomeContentState();
@@ -457,41 +398,15 @@ class _HomeContentState extends State<_HomeContent> {
   final MedicineController _medicineController = MedicineController();
   late Future<List<Medicine>> _medicinesFuture;
 
-  // Health Quote Logic
   int _currentQuoteIndex = 0;
   Timer? _quoteTimer;
 
   final List<String> _healthQuotes = [
     "Drink at least 8 glasses of water a day.",
     "A good laugh and a long sleep are the best cures.",
-    "Early to bed and early to rise makes you healthy.",
     "Take your medicines on time for better results.",
     "A 30-minute walk everyday keeps the heart strong.",
     "Eat more fruits and vegetables.",
-    "Stay hydrated to maintain energy levels.",
-    "Limit sugar intake for a healthier life.",
-    "Stretching daily improves flexibility.",
-    "Mental health is as important as physical health.",
-    "Wash your hands properly before eating.",
-    "Get regular check-ups with your doctor.",
-    "Limit salt intake to manage blood pressure.",
-    "Fiber-rich foods aid in digestion.",
-    "Sunshine is a great source of Vitamin D.",
-    "Manage stress with deep breathing exercises.",
-    "Avoid smoking and alcohol.",
-    "Maintain a healthy weight for your age.",
-    "Connect with loved ones to stay happy.",
-    "Read a book to keep the mind sharp.",
-    "Wear comfortable shoes to prevent falls.",
-    "Protect your skin from excessive sun.",
-    "Practice good posture while sitting.",
-    "Eat calcium-rich foods for strong bones.",
-    "Listen to your body signals.",
-    "A balanced diet is the key to longevity.",
-    "Keep your living space clean and airy.",
-    "Brush your teeth twice a day.",
-    "Positive thoughts create a positive life.",
-    "Your health is your greatest wealth."
   ];
 
   @override
@@ -525,16 +440,15 @@ class _HomeContentState extends State<_HomeContent> {
 
   @override
   Widget build(BuildContext context) {
-    // Get screen height to calculate the "max height" for the list
     final screenHeight = MediaQuery.of(context).size.height;
 
     return SingleChildScrollView(
-      physics: const ClampingScrollPhysics(), // Keeps page stable
+      physics: const ClampingScrollPhysics(),
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- 1. HEALTH QUOTE (Fixed at Top) ---
+          // --- HEALTH QUOTE ---
           TweenAnimationBuilder(
             duration: const Duration(seconds: 1),
             tween: Tween<double>(begin: 0.8, end: 1),
@@ -543,7 +457,7 @@ class _HomeContentState extends State<_HomeContent> {
                 Transform.scale(scale: value, child: child),
             child: Card(
               elevation: 5,
-              shadowColor: Colors.blueAccent.withValues(alpha: 0.2),
+              shadowColor: Colors.blueAccent.withOpacity(0.2),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20)),
               child: Container(
@@ -564,7 +478,7 @@ class _HomeContentState extends State<_HomeContent> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.6),
+                        color: Colors.white.withOpacity(0.6),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
@@ -625,10 +539,7 @@ class _HomeContentState extends State<_HomeContent> {
           ),
           const SizedBox(height: 15),
 
-          // --- 2. MEDICINE LIST (Constrained Height Area) ---
-          // This is the fix. It allows the list to grow up to 45% of the screen.
-          // If 1 item: it fits naturally.
-          // If 10 items: it scrolls INSIDE this box, keeping buttons visible.
+          // --- MEDICINE LIST ---
           FutureBuilder<List<Medicine>>(
             future: _medicinesFuture,
             builder: (context, snapshot) {
@@ -640,21 +551,19 @@ class _HomeContentState extends State<_HomeContent> {
                           CircularProgressIndicator(color: Colors.pinkAccent)),
                 );
               } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                // Empty state looks full enough
                 return Container(
                   width: double.infinity,
                   height: 150,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.6),
+                      color: Colors.white.withOpacity(0.6),
                       borderRadius: BorderRadius.circular(15),
-                      border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.5))),
+                      border: Border.all(color: Colors.white.withOpacity(0.5))),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.check_circle_outline,
-                          size: 40, color: Colors.green.withValues(alpha: 0.5)),
+                          size: 40, color: Colors.green.withOpacity(0.5)),
                       const SizedBox(height: 10),
                       const Text("No medicines scheduled for today.",
                           style: TextStyle(
@@ -666,15 +575,13 @@ class _HomeContentState extends State<_HomeContent> {
 
               final medicines = snapshot.data!;
 
-              // ConstrainedBox enforces the "Window" effect
               return ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: 100, // Always show at least this much
-                  maxHeight: screenHeight * 0.45, // Cap height at 45% of screen
+                  minHeight: 100,
+                  maxHeight: screenHeight * 0.45,
                 ),
                 child: Container(
                   decoration: BoxDecoration(
-                    // A subtle visual cue that this is a contained list
                     color: Colors.transparent,
                     borderRadius: BorderRadius.circular(15),
                   ),
@@ -682,13 +589,10 @@ class _HomeContentState extends State<_HomeContent> {
                     thumbVisibility: true,
                     radius: const Radius.circular(10),
                     child: ListView.builder(
-                      shrinkWrap:
-                          true, // Only take needed space up to max constraint
-                      padding: const EdgeInsets.only(
-                          bottom: 10, right: 5), // Space for scrollbar
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.only(bottom: 10, right: 5),
                       itemCount: medicines.length,
-                      physics:
-                          const BouncingScrollPhysics(), // Nice scroll feel
+                      physics: const BouncingScrollPhysics(),
                       itemBuilder: (context, index) {
                         return _buildMedicineCard(
                             context, medicines[index], index);
@@ -702,7 +606,7 @@ class _HomeContentState extends State<_HomeContent> {
 
           const SizedBox(height: 20),
 
-          // --- 3. ACTION BUTTONS (Always accessible now) ---
+          // --- ACTION BUTTONS ---
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -723,7 +627,6 @@ class _HomeContentState extends State<_HomeContent> {
                       AppRoutes.viewAll)),
             ],
           ),
-          // Extra padding at bottom to ensure nothing is cut off
           const SizedBox(height: 80),
         ],
       ),
@@ -740,7 +643,7 @@ class _HomeContentState extends State<_HomeContent> {
           Transform.translate(offset: offset, child: child),
       child: Card(
         elevation: 3,
-        shadowColor: Colors.grey.withValues(alpha: 0.2),
+        shadowColor: Colors.grey.withOpacity(0.2),
         margin: const EdgeInsets.only(bottom: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         child: InkWell(
@@ -784,12 +687,31 @@ class _HomeContentState extends State<_HomeContent> {
                 ),
                 InkWell(
                   onTap: () async {
+                    // 1. Add to Database History
                     await MedicineHistoryService.addMedicineRecord(
                         MedicineRecord(
                             medicineName: medicine.name,
                             time: medicine.time,
                             dosage: medicine.dose,
                             dateTaken: DateTime.now()));
+
+                    // 2. Add to Activity Log (Critical for the drawer)
+                    final timeStr =
+                        "${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}";
+                    final entry = NotificationEntry(
+                        id: DateTime.now().millisecondsSinceEpoch.toString(),
+                        title: "Medicine Taken",
+                        message: "You took ${medicine.name}",
+                        time: timeStr,
+                        type: NotificationType.taken);
+
+                    await ActivityLogService.addLog(entry);
+
+                    // 3. Update Drawer Immediately
+                    if (widget.onMedicineAction != null) {
+                      widget.onMedicineAction!("Taken", medicine.name, timeStr);
+                    }
+
                     ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('${medicine.name} taken!')));
                   },
@@ -844,7 +766,7 @@ class _HomeContentState extends State<_HomeContent> {
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
+                                  color: Colors.black.withOpacity(0.05),
                                   blurRadius: 10)
                             ],
                           ),
@@ -907,7 +829,7 @@ class _HomeContentState extends State<_HomeContent> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.7),
+            color: Colors.white.withOpacity(0.7),
             borderRadius: BorderRadius.circular(12)),
         child: Row(
           children: [
@@ -931,7 +853,7 @@ class _HomeContentState extends State<_HomeContent> {
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-              color: colors[0].withValues(alpha: 0.3),
+              color: colors[0].withOpacity(0.3),
               blurRadius: 8,
               offset: const Offset(0, 4))
         ],
