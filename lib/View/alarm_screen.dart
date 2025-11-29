@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // ✅ Added for User Privacy
 import '../services/medicinelog_service.dart';
 import '../services/notification_service.dart';
 import '../services/activity_log_service.dart';
@@ -32,90 +33,95 @@ class _AlarmScreenState extends State<AlarmScreen> {
     super.dispose();
   }
 
-  Future<void> _handleAction(
-      String action, String medicineName, String payload, String medicineId) async {
-    // Stop ringing
+  Future<void> _handleAction(String action, String medicineName, String payload,
+      String medicineId) async {
+    // 1. Stop the ringing immediately
     await NotificationService.cancelAll();
+
+    // 2. Check who is logged in
+    final user = FirebaseAuth.instance.currentUser;
+
+    // 🔒 PRIVACY FIX: If no user is logged in, do NOT save logs.
+    // This prevents "Ghost Alarms" from previous accounts polluting the new account.
+    if (user == null) {
+      print("No user logged in. Skipping log save.");
+      SystemNavigator.pop();
+      return;
+    }
 
     final now = DateTime.now();
     String timeStr = "${now.hour}:${now.minute.toString().padLeft(2, '0')}";
 
-    // Send to backend only for Taken/Skipped
+    // 3. Send to Backend (Only if we have a valid Medicine ID)
     if ((action == "Taken" || action == "Skip") && medicineId.isNotEmpty) {
       try {
         print("Sending action to backend: $action for medicineId: $medicineId");
-
-        final success = await MedicineLogService().logAction(
+        // The service should ideally handle the user check, but we are safe because of the check above
+        await MedicineLogService().logAction(
           medicineId,
-          action.toLowerCase(), // Make sure backend receives 'taken' or 'skipped'
+          action.toLowerCase(),
         );
-
-        print("Backend logAction success: $success");
       } catch (e) {
         print("Error sending logAction: $e");
       }
     }
 
-    // Add to local activity log
-    ActivityLogService.addLog(NotificationEntry(
+    // 4. Add to Local Activity Log (Dashboard Drawer)
+    // This now relies on ActivityLogService using the User ID as part of the key
+    await ActivityLogService.addLog(NotificationEntry(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: action == "Taken"
           ? "Medicine Taken"
           : action == "Skip"
-          ? "Medicine Skipped"
-          : "Alarm Snoozed",
+              ? "Medicine Skipped"
+              : "Alarm Snoozed",
       message: action == "Taken"
           ? "You took $medicineName"
           : action == "Skip"
-          ? "You skipped $medicineName"
-          : "Snoozed $medicineName for 5 min",
+              ? "You skipped $medicineName"
+              : "Snoozed $medicineName for 5 min",
       time: timeStr,
       type: action == "Taken"
           ? NotificationType.taken
           : action == "Skip"
-          ? NotificationType.skipped
-          : NotificationType.snoozed,
+              ? NotificationType.skipped
+              : NotificationType.snoozed,
     ));
 
-    // Schedule snooze if needed
+    // 5. Schedule snooze if needed
     if (action == "Snooze") {
       await NotificationService.scheduleSnoozeNotification(payload, minutes: 5);
     }
 
-    // Show confirmation notification
+    // 6. Show confirmation notification
     String title = action == "Taken"
         ? "Great Job! 🎉"
         : action == "Skip"
-        ? "Skipped ⚠️"
-        : "Snoozed 💤";
+            ? "Skipped ⚠️"
+            : "Snoozed 💤";
     String body = action == "Taken"
         ? "Marked $medicineName as taken."
         : action == "Skip"
-        ? "You skipped $medicineName."
-        : "Alarm will ring again in 5 minutes.";
+            ? "You skipped $medicineName."
+            : "Alarm will ring again in 5 minutes.";
 
     await NotificationService.showConfirmationNotification(title, body);
-
-    print("Finished handling action: $action for $medicineName");
 
     SystemNavigator.pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Parse Payload
     final String payload =
         ModalRoute.of(context)?.settings.arguments as String? ?? "Medicine|||";
     final List<String> parts = payload.split('|');
-
-    // Debug: inspect payload and parsed medicineId
-    print('AlarmScreen payload: $payload');
 
     final String medicineName = parts.isNotEmpty ? parts[0] : "Medicine";
     final String dose = parts.length > 1 ? parts[1] : "1 Dose";
     final String instruction = parts.length > 2 ? parts[2] : "Take medicine";
     final String imagePath = parts.length > 3 ? parts[3] : "";
-    final String medicineId = parts.length > 4 ? parts[4] : ""; // ✅ Corrected
-    print('AlarmScreen parsed medicineId: $medicineId');
+    final String medicineId = parts.length > 4 ? parts[4] : "";
 
     final size = MediaQuery.of(context).size;
 
@@ -152,14 +158,14 @@ class _AlarmScreenState extends State<AlarmScreen> {
                 Expanded(
                   child: Container(
                     width: double.infinity,
-                    padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 25),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 25),
                     decoration: BoxDecoration(
                       color: const Color(0xFFE8EAF6),
                       borderRadius: BorderRadius.circular(35),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
+                          color: Colors.black.withOpacity(0.05),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         )
@@ -185,7 +191,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                             border: Border.all(color: Colors.white, width: 4),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.1),
+                                color: Colors.black.withOpacity(0.1),
                                 blurRadius: 15,
                                 offset: const Offset(0, 8),
                               )
@@ -193,10 +199,10 @@ class _AlarmScreenState extends State<AlarmScreen> {
                           ),
                           child: ClipOval(
                             child: (imagePath.isNotEmpty &&
-                                File(imagePath).existsSync())
+                                    File(imagePath).existsSync())
                                 ? Image.file(File(imagePath), fit: BoxFit.cover)
                                 : const Icon(Icons.medication,
-                                size: 60, color: Colors.grey),
+                                    size: 60, color: Colors.grey),
                           ),
                         ),
                         Column(
@@ -260,8 +266,8 @@ class _AlarmScreenState extends State<AlarmScreen> {
                                     borderRadius: BorderRadius.circular(25),
                                   ),
                                 ),
-                                onPressed: () => _handleAction(
-                                    "Snooze", medicineName, payload, medicineId),
+                                onPressed: () => _handleAction("Snooze",
+                                    medicineName, payload, medicineId),
                                 child: const Text("Snooze 5m",
                                     style: TextStyle(
                                         color: Colors.white, fontSize: 16)),
@@ -275,15 +281,15 @@ class _AlarmScreenState extends State<AlarmScreen> {
                                   label: "Skip",
                                   color: const Color(0xFFE1BEE7),
                                   textColor: Colors.black87,
-                                  onTap: () =>
-                                      _handleAction("Skip", medicineName, payload, medicineId),
+                                  onTap: () => _handleAction("Skip",
+                                      medicineName, payload, medicineId),
                                 ),
                                 _buildActionButton(
                                   label: "Taken",
                                   color: const Color(0xFF69F0AE),
                                   textColor: Colors.black87,
-                                  onTap: () =>
-                                      _handleAction("Taken", medicineName, payload, medicineId),
+                                  onTap: () => _handleAction("Taken",
+                                      medicineName, payload, medicineId),
                                 ),
                               ],
                             ),

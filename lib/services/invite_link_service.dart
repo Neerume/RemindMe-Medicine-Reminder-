@@ -3,13 +3,11 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 
-import '../View/inviteScreen.dart';
+import '../View/invite_Screen.dart';
 import '../routes.dart';
 import 'app_navigator.dart';
 import 'relationship_service.dart';
 import 'user_data_service.dart';
-import 'invite_notification_service.dart';
-import '../Model/invite_info.dart';
 
 class InviteLinkService {
   InviteLinkService._();
@@ -25,14 +23,14 @@ class InviteLinkService {
     _initialized = true;
 
     _sub = _appLinks.uriLinkStream.listen(
-          (uri) => _handleUri(uri),
+      (uri) => _handleUri(uri),
       onError: (err) => debugPrint('Invite link error: $err'),
     );
   }
+
   Future<void> handleInviteLink(Uri uri) async {
     await _handleUri(uri);
   }
-
 
   Future<void> dispose() async {
     await _sub?.cancel();
@@ -60,7 +58,9 @@ class InviteLinkService {
     final role = uri.queryParameters['role'];
     final inviterName = uri.queryParameters['inviterName'];
 
-    if (inviterId == null || inviterId.isEmpty || role == null ||
+    if (inviterId == null ||
+        inviterId.isEmpty ||
+        role == null ||
         role.isEmpty) {
       return;
     }
@@ -77,11 +77,12 @@ class InviteLinkService {
     final navigator = AppNavigator.navigatorKey.currentState;
 
     if (userId == null) {
+      // If not logged in, go to signup
       navigator?.pushNamedAndRemoveUntil(AppRoutes.signup, (route) => false);
       return;
     }
 
-    // Send pending invite to backend
+    // Send pending invite to backend (Create the connection record)
     try {
       if (role == 'caregiver') {
         await RelationshipService.inviteCaregiver(
@@ -91,18 +92,19 @@ class InviteLinkService {
             inviterId: inviterId, inviteeId: userId);
       }
     } catch (e) {
-      debugPrint('Failed to create invite: $e');
+      // We log this, but we still navigate to the screen.
+      // If this failed, the user will see an error when they click "Accept" in the screen.
+      debugPrint('Failed to create invite connection: $e');
     }
 
     // Navigate to InviteScreen
     navigator?.push(
       MaterialPageRoute(
-        builder: (_) =>
-            InviteScreen(
-              inviterId: inviterId,
-              role: role,
-              inviterName: inviterName,
-            ),
+        builder: (_) => InviteScreen(
+          inviterId: inviterId,
+          role: role,
+          inviterName: inviterName,
+        ),
       ),
     );
   }

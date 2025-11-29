@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../routes.dart';
 import '../services/user_data_service.dart';
-import 'inviteScreen.dart';
+import 'invite_Screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
