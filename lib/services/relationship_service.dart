@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart'; // ✅ Added for debugPrint
 import '../Model/relationship_connection.dart';
 import '../config/api.dart';
 import 'user_data_service.dart';
@@ -75,7 +76,9 @@ class RelationshipService {
     required String action, // 'accept' or 'reject'
   }) async {
     final token = await UserDataService.getToken();
-    final url = Uri.parse(ApiConfig.respondInvite);
+
+    // ✅ FIX: Changed 'respondInvite' to 'respondToInvite' to match ApiConfig
+    final url = Uri.parse(ApiConfig.respondToInvite);
 
     // Define the body first
     final body = jsonEncode({
@@ -85,8 +88,9 @@ class RelationshipService {
       'action': action,
     });
 
-    print("Sending POST to $url");
-    print("Body: $body");
+    // ✅ FIX: Used debugPrint instead of print to remove warnings
+    debugPrint("Sending POST to $url");
+    debugPrint("Body: $body");
 
     final response = await http.post(
       url,
@@ -97,7 +101,7 @@ class RelationshipService {
       body: body,
     );
 
-    print("Response: ${response.statusCode} ${response.body}");
+    debugPrint("Response: ${response.statusCode} ${response.body}");
 
     final bodyJson = jsonDecode(response.body);
     // Handle cases where message might not exist or be null
@@ -169,12 +173,9 @@ class RelationshipService {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
-      // FIXED: Added empty JSON body to prevent server 500 error
       body: jsonEncode({}),
     );
 
-    // If status is 409, it means invite already exists.
-    // We treat this as success so the user can proceed to Accept it.
     if (response.statusCode == 409) return;
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -198,12 +199,9 @@ class RelationshipService {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
-      // FIXED: Added empty JSON body to prevent server 500 error
       body: jsonEncode({}),
     );
 
-    // If status is 409, it means invite already exists.
-    // We treat this as success so the user can proceed to Accept it.
     if (response.statusCode == 409) return;
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
