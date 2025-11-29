@@ -23,7 +23,7 @@ Future<void> main() async {
   await NotificationService.init(AppNavigator.navigatorKey);
   await InviteLinkService.instance.initialize();
 
-  runApp(MyApp(initialRoute: initialRoute, initialArgs: initialArgs));
+  runApp(const MyApp(initialRoute: AppRoutes.splash, initialArgs: null));
 }
 
 class MyApp extends StatelessWidget {

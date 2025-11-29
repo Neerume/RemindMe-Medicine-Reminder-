@@ -2,23 +2,19 @@ import 'dart:async'; // Required for Timer
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../routes.dart';
+import 'inviteScreen.dart';
 import 'view_all_medicine.dart';
 import 'caregiver_screen.dart';
 import 'profile_screen.dart';
-import 'invite_Screen.dart';
 import '../services/medicine_history_service.dart';
 import '../Controller/medicineController.dart';
 import '../Model/medicine.dart';
 import '../Model/invite_info.dart';
 import '../services/notification_service.dart';
-<<<<<<< Updated upstream
 import '../services/activity_log_service.dart';
-=======
 import '../services/invite_notification_service.dart';
 import '../services/refill_alert_service.dart';
 import '../services/report_service.dart';
-
->>>>>>> Stashed changes
 
 // --- 1. Notification Model ---
 class NotificationEntry {
@@ -40,8 +36,9 @@ class NotificationEntry {
 }
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final int initialIndex; // Add this
 
+  const DashboardScreen({super.key, this.initialIndex = 0});
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
