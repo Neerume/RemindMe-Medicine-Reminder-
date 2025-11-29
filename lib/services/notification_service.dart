@@ -40,17 +40,15 @@ class NotificationService {
 
     await _notificationsPlugin.initialize(
       settings,
-      // 1. Handles Banner Tap (When app is in foreground/background)
       onDidReceiveNotificationResponse: (NotificationResponse details) {
         if (details.payload != null && _navigatorKey?.currentState != null) {
-          // Check if payload is an invite link
-          if (details.payload!.startsWith("http") || details.payload!.contains("invite")) {
+          if (details.payload!.startsWith("http") ||
+              details.payload!.contains("invite")) {
             _navigatorKey!.currentState!.pushNamed(
-              '/inviteScreen', // your invite screen route
-              arguments: details.payload, // pass the invite link
+              '/inviteScreen',
+              arguments: details.payload,
             );
           } else {
-            // Otherwise, open the medicine alarm screen
             _navigatorKey!.currentState!.pushNamed(
               '/alarm',
               arguments: details.payload,
@@ -59,7 +57,6 @@ class NotificationService {
         }
       },
     );
-
   }
 
   static Future<void> requestPermissions() async {
@@ -101,6 +98,34 @@ class NotificationService {
     );
   }
 
+  // --- NEW: REFILL ALERT NOTIFICATION (ADDED THIS) ---
+  static Future<void> showRefillNotification(String title, String body) async {
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+      'med_refill_channel', // Unique Channel ID
+      'Refill Alerts', // Channel Name
+      channelDescription: 'Alerts when medicine stock is low',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      color: Colors.red, // Show red color for urgency
+      enableVibration: true,
+    );
+
+    const NotificationDetails details =
+        NotificationDetails(android: androidDetails);
+
+    // Using a random ID ensures multiple alerts can stack
+    int notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    await _notificationsPlugin.show(
+      notificationId,
+      title,
+      body,
+      details,
+    );
+  }
+
   // --- SNOOZE FUNCTION ---
   static Future<void> scheduleSnoozeNotification(String payload,
       {int minutes = 5}) async {
@@ -113,14 +138,11 @@ class NotificationService {
         'med_snooze_channel',
         'Snooze Alarms',
         channelDescription: 'Channel for Medicine Alarms (Snoozed)',
-        importance: Importance.max, // Heads-up Banner
+        importance: Importance.max,
         priority: Priority.high,
         sound: RawResourceAndroidNotificationSound('tone1'),
-
-        // THIS MAKES IT OPEN ON LOCK SCREEN
         fullScreenIntent: true,
-
-        autoCancel: false, // Keep ringing until action
+        autoCancel: false,
         audioAttributesUsage: AudioAttributesUsage.alarm,
         playSound: true,
         category: AndroidNotificationCategory.alarm,
@@ -145,7 +167,6 @@ class NotificationService {
             UILocalNotificationDateInterpretation.absoluteTime,
         payload: payload,
       );
-      print("Snooze scheduled for $minutes minutes.");
     } catch (e) {
       print("Error scheduling snooze: $e");
     }
@@ -187,26 +208,21 @@ class NotificationService {
         );
       }
 
-      // ⚠️ UPDATED CHANNEL ID TO V2 TO FORCE LOCK SCREEN SETTINGS
       AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'med_alarm_channel_v2_$soundFileName', // CHANGED ID
-        'Medicine Alarm V2 ($soundFileName)', // CHANGED NAME
+        'med_alarm_channel_v2_$soundFileName',
+        'Medicine Alarm V2 ($soundFileName)',
         channelDescription: 'Continuous alarm sound for medicines',
-
-        // --- CRITICAL SETTINGS ---
-        importance: Importance.max, // Shows Banner
-        priority: Priority.max, // High Priority
-        fullScreenIntent: true, // Opens Alarm Screen on Lock Screen
-        category: AndroidNotificationCategory.alarm, // Treats as Alarm
-
+        importance: Importance.max,
+        priority: Priority.max,
+        fullScreenIntent: true,
+        category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
         playSound: true,
         sound: RawResourceAndroidNotificationSound(soundFileName),
         audioAttributesUsage: AudioAttributesUsage.alarm,
-        additionalFlags:
-            Int32List.fromList(<int>[4]), // Insistent (loops sound)
+        additionalFlags: Int32List.fromList(<int>[4]),
         styleInformation: styleInformation,
-        autoCancel: false, // Don't disappear automatically
+        autoCancel: false,
         actions: <AndroidNotificationAction>[
           const AndroidNotificationAction(
             'view_id',
@@ -229,7 +245,6 @@ class NotificationService {
 
       final scheduledTime = _nextInstanceOfTime(hour, minute);
 
-      // Payload: Name|Dose|Instruction|PhotoPath|MedicineId
       String payloadData =
           "${medicine.name}|${medicine.dose}|${medicine.instruction}|${medicine.photo ?? ''}|${medicine.id ?? ''}";
 
@@ -260,9 +275,11 @@ class NotificationService {
     }
     return scheduledDate;
   }
-  // --- Show Invite Notification ---
-  static Future<void> showInviteNotification(String title, String message, String inviteLink) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+
+  static Future<void> showInviteNotification(
+      String title, String message, String inviteLink) async {
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
       'invite_channel',
       'Invite Notifications',
       channelDescription: 'Notifications for invite links',
@@ -271,15 +288,15 @@ class NotificationService {
       playSound: true,
     );
 
-    const NotificationDetails details = NotificationDetails(android: androidDetails);
+    const NotificationDetails details =
+        NotificationDetails(android: androidDetails);
 
     await _notificationsPlugin.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000, // unique id
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title,
       message,
       details,
       payload: inviteLink,
     );
   }
-
 }

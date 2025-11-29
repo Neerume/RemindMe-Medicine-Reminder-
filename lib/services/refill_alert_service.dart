@@ -3,15 +3,18 @@ import '../services/medicine_service.dart';
 import '../services/notification_service.dart';
 
 class RefillAlertService {
-  /// Check if medicine needs refill based on pillCount and dose
+  /// Check if medicine needs refill (Logic: Stock <= 5 or less than 7 days supply)
   static bool needsRefill(Medicine medicine) {
     try {
       final pillCount = int.tryParse(medicine.pillCount) ?? 0;
-      if (pillCount <= 0) return true;
 
-      // Extract dose amount from dose string (e.g., "1 tablet" -> 1, "2 tablets" -> 2)
+      // Critical check: direct count
+      if (pillCount <= 5) return true;
+
+      // Extract dose amount
       final doseMatch = RegExp(r'\d+').firstMatch(medicine.dose);
-      final doseAmount = doseMatch != null ? int.tryParse(doseMatch.group(0) ?? '1') ?? 1 : 1;
+      final doseAmount =
+          doseMatch != null ? int.tryParse(doseMatch.group(0) ?? '1') ?? 1 : 1;
 
       if (doseAmount <= 0) return false;
 
@@ -19,32 +22,34 @@ class RefillAlertService {
       final daysRemaining = (pillCount / doseAmount).floor();
 
       // Alert if 7 days or less remaining
-      return daysRemaining <= 7 && pillCount > 0;
+      return daysRemaining <= 7;
     } catch (e) {
       print('Error checking refill: $e');
       return false;
     }
   }
 
-  /// Get refill urgency level
+  /// Get refill urgency level text
   static String getRefillUrgency(Medicine medicine) {
     try {
       final pillCount = int.tryParse(medicine.pillCount) ?? 0;
-      if (pillCount <= 0) return 'critical';
+
+      if (pillCount == 0) return 'Empty';
+      if (pillCount <= 3) return 'Critical';
 
       final doseMatch = RegExp(r'\d+').firstMatch(medicine.dose);
-      final doseAmount = doseMatch != null ? int.tryParse(doseMatch.group(0) ?? '1') ?? 1 : 1;
+      final doseAmount =
+          doseMatch != null ? int.tryParse(doseMatch.group(0) ?? '1') ?? 1 : 1;
 
-      if (doseAmount <= 0) return 'none';
+      if (doseAmount == 0) return 'None';
 
       final daysRemaining = (pillCount / doseAmount).floor();
 
-      if (daysRemaining <= 0) return 'critical';
-      if (daysRemaining <= 3) return 'urgent';
-      if (daysRemaining <= 7) return 'warning';
-      return 'none';
+      if (daysRemaining <= 2) return 'Very Urgent';
+      if (daysRemaining <= 7) return 'Warning';
+      return 'None';
     } catch (e) {
-      return 'none';
+      return 'None';
     }
   }
 
@@ -55,7 +60,8 @@ class RefillAlertService {
       if (pillCount <= 0) return 0;
 
       final doseMatch = RegExp(r'\d+').firstMatch(medicine.dose);
-      final doseAmount = doseMatch != null ? int.tryParse(doseMatch.group(0) ?? '1') ?? 1 : 1;
+      final doseAmount =
+          doseMatch != null ? int.tryParse(doseMatch.group(0) ?? '1') ?? 1 : 1;
 
       if (doseAmount <= 0) return 0;
 
@@ -65,7 +71,7 @@ class RefillAlertService {
     }
   }
 
-  /// Check all medicines and show refill alerts
+  /// Manual check function (can be called on app start)
   static Future<void> checkAndShowRefillAlerts() async {
     try {
       final medicineService = MedicineService();
@@ -74,41 +80,28 @@ class RefillAlertService {
       for (var medicine in medicines) {
         if (needsRefill(medicine)) {
           final daysRemaining = getDaysRemaining(medicine);
-          final urgency = getRefillUrgency(medicine);
+          final pillCount = int.tryParse(medicine.pillCount) ?? 0;
 
-          String title;
-          String body;
+          String title = 'Refill Reminder';
+          String body = '';
 
-          if (daysRemaining <= 0) {
-            title = '⚠️ Refill Needed Now';
-            body = '${medicine.name} is out of stock. Please refill immediately.';
-          } else if (urgency == 'urgent') {
-            title = '🔴 Urgent: Refill Needed';
-            body = '${medicine.name} will run out in $daysRemaining day${daysRemaining == 1 ? '' : 's'}. Please refill soon.';
+          if (pillCount == 0) {
+            title = '⚠️ Stock Empty';
+            body = '${medicine.name} is out of stock!';
+          } else if (pillCount <= 3) {
+            title = '🔴 Critical Stock';
+            body = '${medicine.name} has only $pillCount pills left.';
           } else {
-            title = '🟡 Refill Reminder';
-            body = '${medicine.name} will run out in $daysRemaining day${daysRemaining == 1 ? '' : 's'}. Consider refilling.';
+            body =
+                '${medicine.name} will run out in approx $daysRemaining days.';
           }
 
-          // Show notification (you can customize this)
-          await NotificationService.showConfirmationNotification(title, body);
+          // Show notification
+          await NotificationService.showRefillNotification(title, body);
         }
       }
     } catch (e) {
       print('Error checking refill alerts: $e');
     }
   }
-
-  /// Get list of medicines that need refill
-  static Future<List<Medicine>> getMedicinesNeedingRefill() async {
-    try {
-      final medicineService = MedicineService();
-      final medicines = await medicineService.getMedicines();
-      return medicines.where((med) => needsRefill(med)).toList();
-    } catch (e) {
-      print('Error getting medicines needing refill: $e');
-      return [];
-    }
-  }
 }
-

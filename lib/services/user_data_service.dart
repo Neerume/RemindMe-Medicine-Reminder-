@@ -1,7 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class UserDataService {
-    static const String _keyUsername = 'user_username';
+  static const String _keyUsername = 'user_username';
   static const String _keyToken = 'user_token';
   static const String _keyPhone = 'user_phone';
   static const String _keyUserId = 'user_id';
@@ -26,7 +26,8 @@ class UserDataService {
   }
 
   // ---------------- User Data ----------------
-  static Future<void> saveUserData({required String phone, required String username}) async {
+  static Future<void> saveUserData(
+      {required String phone, required String username}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyPhone, phone);
     await prefs.setString(_keyUsername, username);
@@ -85,15 +86,15 @@ class UserDataService {
     await prefs.remove(_keyInviteInviterName);
   }
 
-    // Mark that a new connection has been synced
-    static Future<void> markNewConnectionSynced() async {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('newConnectionSynced', true);
-    }
+  // Mark that a new connection has been synced
+  static Future<void> markNewConnectionSynced() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('newConnectionSynced', true);
+  }
 
-    // Optional: check if a new connection was synced
-    static Future<bool> isNewConnectionSynced() async {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool('newConnectionSynced') ?? false;
-    }
+  // Optional: check if a new connection was synced
+  static Future<bool> isNewConnectionSynced() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('newConnectionSynced') ?? false;
+  }
 }

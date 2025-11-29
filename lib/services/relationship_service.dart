@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart'; // ✅ Added for debugPrint
+import 'package:flutter/foundation.dart'; // For debugPrint
 import '../Model/relationship_connection.dart';
 import '../config/api.dart';
 import 'user_data_service.dart';
@@ -69,28 +69,31 @@ class RelationshipService {
   }
 
   /// Respond to an invite (accept/reject)
+  /// Matches Postman Payload specifically
   static Future<String> respondToInvite({
     required String inviterId,
     required String inviteeId,
-    required String type,
+    required String type, // 'caregiver' or 'patient'
     required String action, // 'accept' or 'reject'
   }) async {
     final token = await UserDataService.getToken();
 
-    // ✅ FIX: Changed 'respondInvite' to 'respondToInvite' to match ApiConfig
-    final url = Uri.parse(ApiConfig.respondToInvite);
+    // Ensure URL is correct
+    final url = Uri.parse(ApiConfig.respondInvite);
 
-    // Define the body first
-    final body = jsonEncode({
-      'inviterId': inviterId,
-      'inviteeId': inviteeId,
-      'type': type,
-      'action': action,
-    });
+    // 🛠️ FIX: Trim strings to avoid hidden spaces from deep links
+    final Map<String, dynamic> requestBody = {
+      'inviterId': inviterId.trim(),
+      'inviteeId': inviteeId.trim(),
+      'type': type.trim(),
+      'action': action.trim(),
+    };
 
-    // ✅ FIX: Used debugPrint instead of print to remove warnings
-    debugPrint("Sending POST to $url");
-    debugPrint("Body: $body");
+    final bodyEncoded = jsonEncode(requestBody);
+
+    // 🔍 DEBUG: Print exact payload sending to server
+    debugPrint("🚀 Sending POST to: $url");
+    debugPrint("📦 Payload: $bodyEncoded");
 
     final response = await http.post(
       url,
@@ -98,13 +101,13 @@ class RelationshipService {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
-      body: body,
+      body: bodyEncoded,
     );
 
-    debugPrint("Response: ${response.statusCode} ${response.body}");
+    debugPrint("📥 Response Status: ${response.statusCode}");
+    debugPrint("📥 Response Body: ${response.body}");
 
     final bodyJson = jsonDecode(response.body);
-    // Handle cases where message might not exist or be null
     final message = bodyJson['message'] ?? 'Unexpected response';
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -158,7 +161,7 @@ class RelationshipService {
     throw Exception('Failed to load patients');
   }
 
-  /// Invite a caregiver (creates pending invite on backend)
+  /// Invite a caregiver
   static Future<void> inviteCaregiver({
     required String inviterId,
     required String inviteeId,
@@ -184,7 +187,7 @@ class RelationshipService {
     }
   }
 
-  /// Invite a patient (creates pending invite on backend)
+  /// Invite a patient
   static Future<void> invitePatient({
     required String inviterId,
     required String inviteeId,
