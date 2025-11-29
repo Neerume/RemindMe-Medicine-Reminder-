@@ -8,6 +8,8 @@ class UserDataService {
   static const String _keyInviteInviterId = 'invite_inviter_id';
   static const String _keyInviteRole = 'invite_role';
   static const String _keyInviteInviterName = 'invite_inviter_name';
+  static const String _keyMongoId = 'user_mongo_id';
+
 
   // ---------------- Token ----------------
   static Future<void> saveToken(String token) async {
@@ -92,9 +94,23 @@ class UserDataService {
     await prefs.setBool('newConnectionSynced', true);
   }
 
+    // Optional: check if a new connection was synced
+    static Future<bool> isNewConnectionSynced() async {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('newConnectionSynced') ?? false;
+    }
   // Optional: check if a new connection was synced
   static Future<bool> isNewConnectionSynced() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool('newConnectionSynced') ?? false;
   }
+  static Future<void> saveMongoId(String mongoId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyMongoId, mongoId);
+  }
+  static Future<String?> getMongoId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyMongoId);
+  }
+
 }

@@ -77,8 +77,6 @@ class RelationshipService {
     required String action, // 'accept' or 'reject'
   }) async {
     final token = await UserDataService.getToken();
-
-    // Ensure URL is correct
     final url = Uri.parse(ApiConfig.respondInvite);
 
     // 🛠️ FIX: Trim strings to avoid hidden spaces from deep links
@@ -91,6 +89,8 @@ class RelationshipService {
 
     final bodyEncoded = jsonEncode(requestBody);
 
+    print("Sending POST to $url");
+    print("Body: $body");
     // 🔍 DEBUG: Print exact payload sending to server
     debugPrint("🚀 Sending POST to: $url");
     debugPrint("📦 Payload: $bodyEncoded");
@@ -122,6 +122,7 @@ class RelationshipService {
       String userId) async {
     final token = await UserDataService.getToken();
     final url = Uri.parse(ApiConfig.getCaregivers);
+
     final response = await http.get(
       url,
       headers: {
@@ -144,6 +145,7 @@ class RelationshipService {
       String userId) async {
     final token = await UserDataService.getToken();
     final url = Uri.parse(ApiConfig.getPatients);
+
     final response = await http.get(
       url,
       headers: {
@@ -168,7 +170,7 @@ class RelationshipService {
   }) async {
     final token = await UserDataService.getToken();
     final url =
-        Uri.parse('${ApiConfig.inviteCaregiver}/$inviterId?userId=$inviteeId');
+    Uri.parse('${ApiConfig.inviteCaregiver}/$inviterId?userId=$inviteeId');
 
     final response = await http.post(
       url,
@@ -194,7 +196,7 @@ class RelationshipService {
   }) async {
     final token = await UserDataService.getToken();
     final url =
-        Uri.parse('${ApiConfig.invitePatient}/$inviterId?userId=$inviteeId');
+    Uri.parse('${ApiConfig.invitePatient}/$inviterId?userId=$inviteeId');
 
     final response = await http.post(
       url,
