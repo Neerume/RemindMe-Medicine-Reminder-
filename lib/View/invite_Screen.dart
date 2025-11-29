@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../services/relationship_service.dart';
 import '../services/user_data_service.dart';
-import '../services/invite_notification_service.dart';
-import '../Model/invite_info.dart';
 import 'dashboard_screen.dart';
 
 class InviteScreen extends StatefulWidget {
@@ -28,9 +26,21 @@ class _InviteScreenState extends State<InviteScreen> {
 
   Future<void> _respondInvite(String action) async {
     final userId = await UserDataService.getUserId();
+
+    // Debug print
+    print(
+        "Responding to invite: User=$userId, Inviter=${widget.inviterId}, Role=${widget.role}, Action=$action");
+
     if (userId == null) {
       setState(() {
         _error = 'Please log in to respond to invitations.';
+      });
+      return;
+    }
+
+    if (userId == widget.inviterId) {
+      setState(() {
+        _error = 'You cannot invite yourself.';
       });
       return;
     }
@@ -53,31 +63,30 @@ class _InviteScreenState extends State<InviteScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
 
-      // Remove from pending invites
-      await InviteNotificationService.removePendingInvite(
-        widget.inviterId,
-        widget.role,
-      );
-
-      // Wait for clear info
+      // Clear invite info so the screen doesn't show again on restart
       await UserDataService.clearInviteInfo();
 
-      // FIXED: Added this check again because we used 'await' above.
-      // We cannot use 'context' (Navigator) after an await without checking if mounted.
       if (!mounted) return;
 
       if (action == 'accept') {
+        // Go to Dashboard -> Caregiver Tab (Index 2)
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
               builder: (_) => const DashboardScreen(initialIndex: 2)),
           (_) => false,
         );
       } else {
-        Navigator.of(context).pop();
+        // Go to Dashboard -> Home Tab (Index 0)
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+              builder: (_) => const DashboardScreen(initialIndex: 0)),
+          (_) => false,
+        );
       }
     } catch (e) {
+      print("Invite Error: $e"); // CHECK YOUR CONSOLE IF THIS HAPPENS
       setState(() {
-        _error = 'Unable to update invite. Please try again.';
+        _error = 'Connection failed. Check internet or permissions.';
       });
     } finally {
       if (mounted) {
@@ -87,21 +96,8 @@ class _InviteScreenState extends State<InviteScreen> {
   }
 
   Future<void> _skipInvite() async {
-    // Save invite to pending invites for later
-    await InviteNotificationService.addPendingInvite(
-      InviteInfo(
-        inviterId: widget.inviterId,
-        role: widget.role,
-        inviterName: widget.inviterName,
-      ),
-    );
-
-    // Clear current invite info
     await UserDataService.clearInviteInfo();
-
     if (!mounted) return;
-
-    // Navigate back to dashboard
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const DashboardScreen(initialIndex: 0)),
       (_) => false,
@@ -110,9 +106,10 @@ class _InviteScreenState extends State<InviteScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Logic: If role is 'caregiver', I was invited TO BE a caregiver.
     final isCaregiverInvite = widget.role == 'caregiver';
     final inviteeRoleText = isCaregiverInvite ? 'caregiver' : 'patient';
-    final inviterDisplayName = widget.inviterName ?? 'Someone on RemindMe';
+    final inviterDisplayName = widget.inviterName ?? 'Someone';
 
     return Scaffold(
       appBar: AppBar(
@@ -120,6 +117,7 @@ class _InviteScreenState extends State<InviteScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
+        automaticallyImplyLeading: false, // Hide back button
       ),
       body: SafeArea(
         child: Padding(
@@ -223,7 +221,8 @@ class _InviteScreenState extends State<InviteScreen> {
                   padding: const EdgeInsets.only(bottom: 16),
                   child: Text(
                     _error!,
-                    style: const TextStyle(color: Colors.redAccent),
+                    style: const TextStyle(
+                        color: Colors.redAccent, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                 ),

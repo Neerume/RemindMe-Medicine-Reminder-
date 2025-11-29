@@ -13,7 +13,6 @@ class RelationshipService {
   static const String hostedInviteBase =
       'https://neerume.github.io/remindme_links/invite.html';
 
-
   /// Build an in-app deep link to open the Flutter app
   static String buildDeepLink({
     required String role,
@@ -61,7 +60,8 @@ class RelationshipService {
     final params = {
       'role': role,
       'inviterId': inviterId,
-      if (inviterName != null && inviterName.isNotEmpty) 'inviterName': inviterName,
+      if (inviterName != null && inviterName.isNotEmpty)
+        'inviterName': inviterName,
     };
     final query = Uri(queryParameters: params).query;
     return '$hostedInviteBase?$query';
@@ -100,17 +100,19 @@ class RelationshipService {
     print("Response: ${response.statusCode} ${response.body}");
 
     final bodyJson = jsonDecode(response.body);
+    // Handle cases where message might not exist or be null
     final message = bodyJson['message'] ?? 'Unexpected response';
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return message;
+      return message.toString();
     }
 
-    throw Exception(message);
+    throw Exception(message.toString());
   }
 
   /// Fetch caregivers
-  static Future<List<RelationshipConnection>> fetchCaregivers(String userId) async {
+  static Future<List<RelationshipConnection>> fetchCaregivers(
+      String userId) async {
     final token = await UserDataService.getToken();
     final url = Uri.parse(ApiConfig.getCaregivers);
     final response = await http.get(
@@ -123,13 +125,16 @@ class RelationshipService {
 
     if (response.statusCode == 200) {
       final List data = jsonDecode(response.body);
-      return data.map((e) => RelationshipConnection.fromCaregiverJson(e)).toList();
+      return data
+          .map((e) => RelationshipConnection.fromCaregiverJson(e))
+          .toList();
     }
     throw Exception('Failed to load caregivers');
   }
 
   /// Fetch patients
-  static Future<List<RelationshipConnection>> fetchPatients(String userId) async {
+  static Future<List<RelationshipConnection>> fetchPatients(
+      String userId) async {
     final token = await UserDataService.getToken();
     final url = Uri.parse(ApiConfig.getPatients);
     final response = await http.get(
@@ -142,7 +147,9 @@ class RelationshipService {
 
     if (response.statusCode == 200) {
       final List data = jsonDecode(response.body);
-      return data.map((e) => RelationshipConnection.fromPatientJson(e)).toList();
+      return data
+          .map((e) => RelationshipConnection.fromPatientJson(e))
+          .toList();
     }
     throw Exception('Failed to load patients');
   }
@@ -152,8 +159,23 @@ class RelationshipService {
     required String inviterId,
     required String inviteeId,
   }) async {
-    final url = Uri.parse('${ApiConfig.inviteCaregiver}/$inviterId?userId=$inviteeId');
-    final response = await http.post(url);
+    final token = await UserDataService.getToken();
+    final url =
+        Uri.parse('${ApiConfig.inviteCaregiver}/$inviterId?userId=$inviteeId');
+
+    final response = await http.post(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      // FIXED: Added empty JSON body to prevent server 500 error
+      body: jsonEncode({}),
+    );
+
+    // If status is 409, it means invite already exists.
+    // We treat this as success so the user can proceed to Accept it.
+    if (response.statusCode == 409) return;
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final body = jsonDecode(response.body);
@@ -166,13 +188,27 @@ class RelationshipService {
     required String inviterId,
     required String inviteeId,
   }) async {
-    final url = Uri.parse('${ApiConfig.invitePatient}/$inviterId?userId=$inviteeId');
-    final response = await http.post(url);
+    final token = await UserDataService.getToken();
+    final url =
+        Uri.parse('${ApiConfig.invitePatient}/$inviterId?userId=$inviteeId');
+
+    final response = await http.post(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      // FIXED: Added empty JSON body to prevent server 500 error
+      body: jsonEncode({}),
+    );
+
+    // If status is 409, it means invite already exists.
+    // We treat this as success so the user can proceed to Accept it.
+    if (response.statusCode == 409) return;
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final body = jsonDecode(response.body);
       throw Exception(body['message'] ?? 'Failed to send patient invite');
     }
   }
-
 }
