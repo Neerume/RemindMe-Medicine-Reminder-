@@ -5,6 +5,7 @@ import '../services/user_data_service.dart';
 import '../services/invite_notification_service.dart';
 import '../Model/invite_info.dart';
 import 'dashboard_screen.dart';
+import 'caregiver_screen.dart';
 
 class InviteScreen extends StatefulWidget {
   final String inviterId;
@@ -28,19 +29,30 @@ class _InviteScreenState extends State<InviteScreen> {
 
   Future<void> _respondInvite(String action) async {
     final userId = await UserDataService.getUserId();
+<<<<<<< Updated upstream:lib/View/inviteScreen.dart
+=======
+
+>>>>>>> Stashed changes:lib/View/invite_Screen.dart
     if (userId == null) {
-      setState(() {
-        _error = 'Please log in to respond to invitations.';
-      });
+      setState(() => _error = 'Please log in to respond to invitations.');
       return;
     }
 
+<<<<<<< Updated upstream:lib/View/inviteScreen.dart
+=======
+    if (userId == widget.inviterId) {
+      setState(() => _error = 'You cannot invite yourself.');
+      return;
+    }
+
+>>>>>>> Stashed changes:lib/View/invite_Screen.dart
     setState(() {
       _isProcessing = true;
       _error = null;
     });
 
     try {
+      // Call API to save response
       final message = await RelationshipService.respondToInvite(
         inviterId: widget.inviterId,
         inviteeId: userId,
@@ -53,6 +65,7 @@ class _InviteScreenState extends State<InviteScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
 
+<<<<<<< Updated upstream:lib/View/inviteScreen.dart
       // Remove from pending invites
       await InviteNotificationService.removePendingInvite(
         widget.inviterId,
@@ -60,6 +73,9 @@ class _InviteScreenState extends State<InviteScreen> {
       );
 
       // Wait for clear info
+=======
+      // Clear invite info so screen won't show again
+>>>>>>> Stashed changes:lib/View/invite_Screen.dart
       await UserDataService.clearInviteInfo();
 
       // FIXED: Added this check again because we used 'await' above.
@@ -67,6 +83,7 @@ class _InviteScreenState extends State<InviteScreen> {
       if (!mounted) return;
 
       if (action == 'accept') {
+<<<<<<< Updated upstream:lib/View/inviteScreen.dart
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const DashboardScreen(initialIndex: 2)),
               (_) => false,
@@ -78,10 +95,28 @@ class _InviteScreenState extends State<InviteScreen> {
       setState(() {
         _error = 'Unable to update invite. Please try again.';
       });
-    } finally {
-      if (mounted) {
-        setState(() => _isProcessing = false);
+=======
+        // Mark new connection as synced
+        await UserDataService.markNewConnectionSynced();
+
+        // Navigate to CaregiverScreen
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const CaregiverScreen()),
+              (_) => false,
+        );
+      } else {
+        // Reject -> Navigate to Dashboard
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const DashboardScreen(initialIndex: 0)),
+              (_) => false,
+        );
       }
+    } catch (e) {
+      print("Invite Error: $e");
+      setState(() => _error = 'Connection failed. Check internet or permissions.');
+>>>>>>> Stashed changes:lib/View/invite_Screen.dart
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
   Future<void> _skipInvite() async {
@@ -117,6 +152,10 @@ class _InviteScreenState extends State<InviteScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
+<<<<<<< Updated upstream:lib/View/inviteScreen.dart
+=======
+        automaticallyImplyLeading: false,
+>>>>>>> Stashed changes:lib/View/invite_Screen.dart
       ),
       body: SafeArea(
         child: Padding(
@@ -225,8 +264,7 @@ class _InviteScreenState extends State<InviteScreen> {
                   ),
                 ),
               ElevatedButton(
-                onPressed:
-                    _isProcessing ? null : () => _respondInvite('accept'),
+                onPressed: _isProcessing ? null : () => _respondInvite('accept'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.redAccent,
                   foregroundColor: Colors.white,
@@ -236,23 +274,22 @@ class _InviteScreenState extends State<InviteScreen> {
                 ),
                 child: _isProcessing
                     ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
                     : const Text(
-                        'Accept invite',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
+                  'Accept invite',
+                  style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
               const SizedBox(height: 12),
               OutlinedButton(
-                onPressed:
-                    _isProcessing ? null : () => _respondInvite('reject'),
+                onPressed: _isProcessing ? null : () => _respondInvite('reject'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
