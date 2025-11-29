@@ -40,8 +40,6 @@ dependencies:
   flutter_sound: ^9.2.13        # For voice recording
   permission_handler: ^11.1.0   # For microphone & camera permission
   app_links: ^3.5.1
-  gal: ^2.3.2
-  firebase_auth: ^5.7.0
 
 dev_dependencies:
   flutter_test:

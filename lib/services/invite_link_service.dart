@@ -8,6 +8,8 @@ import '../routes.dart';
 import 'app_navigator.dart';
 import 'relationship_service.dart';
 import 'user_data_service.dart';
+import 'invite_notification_service.dart';
+import '../Model/invite_info.dart';
 
 class InviteLinkService {
   InviteLinkService._();
@@ -26,14 +28,15 @@ class InviteLinkService {
     if (_initialized) return;
     _initialized = true;
 
-    final initialUri = await _appLinks.getInitialAppLink();
-    await _handleUri(initialUri);
-
     _sub = _appLinks.uriLinkStream.listen(
       (uri) => _handleUri(uri),
       onError: (err) => debugPrint('Invite link error: $err'),
     );
   }
+  Future<void> handleInviteLink(Uri uri) async {
+    await _handleUri(uri);
+  }
+
 
   Future<void> dispose() async {
     await _sub?.cancel();
