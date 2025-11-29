@@ -2,7 +2,7 @@ import 'dart:async'; // Required for Timer
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../routes.dart';
-import 'inviteScreen.dart';
+import 'invite_Screen.dart';
 import 'view_all_medicine.dart';
 import 'caregiver_screen.dart';
 import 'profile_screen.dart';
