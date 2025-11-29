@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart'; // For debugPrint
 import '../Model/relationship_connection.dart';
 import '../config/api.dart';
 import 'user_data_service.dart';
@@ -68,32 +69,18 @@ class RelationshipService {
   }
 
   /// Respond to an invite (accept/reject)
+  /// Matches Postman Payload specifically
   static Future<String> respondToInvite({
     required String inviterId,
     required String inviteeId,
-    required String type,
+    required String type, // 'caregiver' or 'patient'
     required String action, // 'accept' or 'reject'
   }) async {
     final token = await UserDataService.getToken();
-<<<<<<< Updated upstream
     final url = Uri.parse(ApiConfig.respondInvite);
 
-    // Define the body first
-    final body = jsonEncode({
-      'inviterId': inviterId,
-      'inviteeId': inviteeId,
-      'type': type,
-      'action': action,
-    });
-
-    print("Sending POST to $url");
-    print("Body: $body");
-=======
-
-    final url = Uri.parse(ApiConfig.respondInvite);
-
-    // Ensure IDs are trimmed strings
-    final requestBody = {
+    // 🛠️ FIX: Trim strings to avoid hidden spaces from deep links
+    final Map<String, dynamic> requestBody = {
       'inviterId': inviterId.trim(),
       'inviteeId': inviteeId.trim(),
       'type': type.trim(),
@@ -102,10 +89,11 @@ class RelationshipService {
 
     final bodyEncoded = jsonEncode(requestBody);
 
-    // DEBUG
+    print("Sending POST to $url");
+    print("Body: $body");
+    // 🔍 DEBUG: Print exact payload sending to server
     debugPrint("🚀 Sending POST to: $url");
     debugPrint("📦 Payload: $bodyEncoded");
->>>>>>> Stashed changes
 
     final response = await http.post(
       url,
@@ -113,13 +101,13 @@ class RelationshipService {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
-      body: body,
+      body: bodyEncoded,
     );
 
-    print("Response: ${response.statusCode} ${response.body}");
+    debugPrint("📥 Response Status: ${response.statusCode}");
+    debugPrint("📥 Response Body: ${response.body}");
 
     final bodyJson = jsonDecode(response.body);
-    // Handle cases where message might not exist or be null
     final message = bodyJson['message'] ?? 'Unexpected response';
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -175,7 +163,7 @@ class RelationshipService {
     throw Exception('Failed to load patients');
   }
 
-  /// Invite a caregiver (creates pending invite on backend)
+  /// Invite a caregiver
   static Future<void> inviteCaregiver({
     required String inviterId,
     required String inviteeId,
@@ -190,12 +178,9 @@ class RelationshipService {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
-      // FIXED: Added empty JSON body to prevent server 500 error
       body: jsonEncode({}),
     );
 
-    // If status is 409, it means invite already exists.
-    // We treat this as success so the user can proceed to Accept it.
     if (response.statusCode == 409) return;
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -204,7 +189,7 @@ class RelationshipService {
     }
   }
 
-  /// Invite a patient (creates pending invite on backend)
+  /// Invite a patient
   static Future<void> invitePatient({
     required String inviterId,
     required String inviteeId,
@@ -219,12 +204,9 @@ class RelationshipService {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
-      // FIXED: Added empty JSON body to prevent server 500 error
       body: jsonEncode({}),
     );
 
-    // If status is 409, it means invite already exists.
-    // We treat this as success so the user can proceed to Accept it.
     if (response.statusCode == 409) return;
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
