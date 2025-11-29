@@ -84,4 +84,16 @@ class UserDataService {
     await prefs.remove(_keyInviteRole);
     await prefs.remove(_keyInviteInviterName);
   }
+
+    // Mark that a new connection has been synced
+    static Future<void> markNewConnectionSynced() async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('newConnectionSynced', true);
+    }
+
+    // Optional: check if a new connection was synced
+    static Future<bool> isNewConnectionSynced() async {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('newConnectionSynced') ?? false;
+    }
 }

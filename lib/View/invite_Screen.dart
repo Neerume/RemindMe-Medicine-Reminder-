@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../services/relationship_service.dart';
 import '../services/user_data_service.dart';
+import '../services/invite_notification_service.dart';
+import '../Model/invite_info.dart';
 import 'dashboard_screen.dart';
+import 'caregiver_screen.dart';
 
 class InviteScreen extends StatefulWidget {
   final String inviterId;
@@ -27,21 +30,13 @@ class _InviteScreenState extends State<InviteScreen> {
   Future<void> _respondInvite(String action) async {
     final userId = await UserDataService.getUserId();
 
-    // Debug print
-    print(
-        "Responding to invite: User=$userId, Inviter=${widget.inviterId}, Role=${widget.role}, Action=$action");
-
     if (userId == null) {
-      setState(() {
-        _error = 'Please log in to respond to invitations.';
-      });
+      setState(() => _error = 'Please log in to respond to invitations.');
       return;
     }
 
     if (userId == widget.inviterId) {
-      setState(() {
-        _error = 'You cannot invite yourself.';
-      });
+      setState(() => _error = 'You cannot invite yourself.');
       return;
     }
 
@@ -51,6 +46,7 @@ class _InviteScreenState extends State<InviteScreen> {
     });
 
     try {
+      // Call API to save response
       final message = await RelationshipService.respondToInvite(
         inviterId: widget.inviterId,
         inviteeId: userId,
@@ -63,61 +59,75 @@ class _InviteScreenState extends State<InviteScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
 
-      // Clear invite info so the screen doesn't show again on restart
+      // Remove from pending invites
+      await InviteNotificationService.removePendingInvite(
+        widget.inviterId,
+        widget.role,
+      );
+
+      // Clear invite info
       await UserDataService.clearInviteInfo();
 
       if (!mounted) return;
 
       if (action == 'accept') {
-        // Go to Dashboard -> Caregiver Tab (Index 2)
+        // Mark new connection as synced
+        await UserDataService.markNewConnectionSynced();
+
+        // Navigate to CaregiverScreen
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-              builder: (_) => const DashboardScreen(initialIndex: 2)),
-          (_) => false,
+          MaterialPageRoute(builder: (_) => const CaregiverScreen()),
+              (_) => false,
         );
       } else {
-        // Go to Dashboard -> Home Tab (Index 0)
+        // Reject -> Navigate to Dashboard
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-              builder: (_) => const DashboardScreen(initialIndex: 0)),
-          (_) => false,
+          MaterialPageRoute(builder: (_) => const DashboardScreen(initialIndex: 0)),
+              (_) => false,
         );
       }
     } catch (e) {
-      print("Invite Error: $e"); // CHECK YOUR CONSOLE IF THIS HAPPENS
-      setState(() {
-        _error = 'Connection failed. Check internet or permissions.';
-      });
+      print("Invite Error: $e");
+      setState(() => _error = 'Connection failed. Check internet or permissions.');
     } finally {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-      }
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
   Future<void> _skipInvite() async {
+    // Save invite to pending invites for later
+    await InviteNotificationService.addPendingInvite(
+      InviteInfo(
+        inviterId: widget.inviterId,
+        role: widget.role,
+        inviterName: widget.inviterName,
+      ),
+    );
+
+    // Clear current invite info
     await UserDataService.clearInviteInfo();
+
     if (!mounted) return;
+
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const DashboardScreen(initialIndex: 0)),
-      (_) => false,
+          (_) => false,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Logic: If role is 'caregiver', I was invited TO BE a caregiver.
     final isCaregiverInvite = widget.role == 'caregiver';
     final inviteeRoleText = isCaregiverInvite ? 'caregiver' : 'patient';
-    final inviterDisplayName = widget.inviterName ?? 'Someone';
+    final inviterDisplayName = widget.inviterName ?? 'Someone on RemindMe';
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Connection Invitation'),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
+        automaticallyImplyLeading: false,
         elevation: 0,
-        automaticallyImplyLeading: false, // Hide back button
       ),
       body: SafeArea(
         child: Padding(
@@ -127,10 +137,7 @@ class _InviteScreenState extends State<InviteScreen> {
             children: [
               Text(
                 '$inviterDisplayName invited you!',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
@@ -142,8 +149,7 @@ class _InviteScreenState extends State<InviteScreen> {
               const SizedBox(height: 32),
               Card(
                 elevation: 4,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
@@ -167,10 +173,7 @@ class _InviteScreenState extends State<InviteScreen> {
                               children: [
                                 Text(
                                   inviterDisplayName,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
@@ -194,9 +197,7 @@ class _InviteScreenState extends State<InviteScreen> {
                         child: Row(
                           children: [
                             Icon(
-                              isCaregiverInvite
-                                  ? Icons.medical_services
-                                  : Icons.favorite,
+                              isCaregiverInvite ? Icons.medical_services : Icons.favorite,
                               color: Colors.redAccent,
                             ),
                             const SizedBox(width: 12),
@@ -221,62 +222,43 @@ class _InviteScreenState extends State<InviteScreen> {
                   padding: const EdgeInsets.only(bottom: 16),
                   child: Text(
                     _error!,
-                    style: const TextStyle(
-                        color: Colors.redAccent, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: Colors.redAccent),
                     textAlign: TextAlign.center,
                   ),
                 ),
               ElevatedButton(
-                onPressed:
-                    _isProcessing ? null : () => _respondInvite('accept'),
+                onPressed: _isProcessing ? null : () => _respondInvite('accept'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.redAccent,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
                 child: _isProcessing
                     ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text(
-                        'Accept invite',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+                    : const Text('Accept invite', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 12),
               OutlinedButton(
-                onPressed:
-                    _isProcessing ? null : () => _respondInvite('reject'),
+                onPressed: _isProcessing ? null : () => _respondInvite('reject'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                child: const Text(
-                  'Reject',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
+                child: const Text('Reject', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               ),
               const SizedBox(height: 12),
               OutlinedButton(
                 onPressed: _isProcessing ? null : _skipInvite,
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                child: const Text(
-                  'Skip for now',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
+                child: const Text('Skip for now', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               ),
               const Spacer(),
               const Text(
