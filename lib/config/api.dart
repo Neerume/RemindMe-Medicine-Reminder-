@@ -21,6 +21,15 @@ class ApiConfig {
   static const String invitePatient =
       "$baseUrl/api/relationship/invite/patient";
   static const String addRelationship = "$baseUrl/api/relationship/addrelation";
+  static const String respondInvite =
+      "$baseUrl/api/relationship/respond-invite";
+  static const String getCaregivers = "$baseUrl/api/relationship/caregivers";
+  static const String getPatients = "$baseUrl/api/relationship/patients";
+  static const String deleteRelation = "$baseUrl/api/relationship/delete";
+
+  static String? get logAction => null;
+
+  static get getReport => null;
 
   // ✅ THIS EXACT NAME MUST MATCH THE SERVICE FILE
   static const String respondInvite = "$baseUrl/api/relationship/respond";

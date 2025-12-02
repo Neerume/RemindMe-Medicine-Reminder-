@@ -6,6 +6,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/medicinelog_service.dart';
 import '../services/notification_service.dart';
 import '../services/activity_log_service.dart';
+import '../services/medicinelog_service.dart';
+import '../services/medicine_service.dart';
+// ✅ ADDED FOR STOCK UPDATE & REFILL CHECK
+import '../Controller/medicineController.dart';
+import '../Model/medicine.dart';
+import '../services/refill_alert_service.dart';
 import '../Controller/medicineController.dart';
 import '../Model/medicine.dart';
 import '../services/medicine_service.dart';
@@ -22,6 +28,9 @@ class _AlarmScreenState extends State<AlarmScreen> {
   String currentDate = "";
   bool _isLoading = false;
   final ScrollController _scrollController = ScrollController();
+  final MedicineController _medicineController = MedicineController();
+
+  // ✅ Added Controller
   final MedicineController _medicineController = MedicineController();
 
   @override
@@ -55,6 +64,92 @@ class _AlarmScreenState extends State<AlarmScreen> {
     final now = DateTime.now();
     String timeStr = "${now.hour}:${now.minute.toString().padLeft(2, '0')}";
 
+    // Extract ID from Payload (Payload format: Name|Dose|Instruction|Photo|ID)
+    List<String> parts = payload.split('|');
+    String medicineId = parts.length > 4 ? parts[4] : "";
+
+    // --- SNOOZE LOGIC ---
+    if (action == "Snooze") {
+      await NotificationService.scheduleSnoozeNotification(payload, minutes: 5);
+
+      ActivityLogService.addLog(NotificationEntry(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: "Alarm Snoozed",
+        message: "Snoozed $medicineName for 5 min",
+        time: timeStr,
+        type: NotificationType.snoozed,
+      ));
+
+      title = "Snoozed 💤";
+      body = "Alarm will ring again in 5 minutes.";
+    }
+
+    // --- TAKEN LOGIC ---
+    else if (action == "Taken") {
+      title = "Great Job! 🎉";
+      body = "Marked $medicineName as taken.";
+
+      // 1. Log to Dashboard
+      ActivityLogService.addLog(NotificationEntry(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: "Medicine Taken",
+        message: "You took $medicineName",
+        time: timeStr,
+        type: NotificationType.taken,
+      ));
+
+      // 2. Log to Backend
+      if (medicineId.isNotEmpty) {
+        MedicineLogService().logAction(medicineId, "taken");
+      }
+
+      // 3. ✅ UPDATE STOCK & CHECK REFILL
+      try {
+        final medicineService = MedicineService();
+        final medicines = await medicineService.getMedicines();
+        Medicine? medicineToUpdate;
+
+        // Try finding medicine by ID or Name
+        if (medicineId.isNotEmpty) {
+          try {
+            medicineToUpdate = medicines.firstWhere((m) => m.id == medicineId);
+          } catch (_) {}
+        }
+        if (medicineToUpdate == null) {
+          try {
+            medicineToUpdate = medicines.firstWhere(
+                (m) => m.name.toLowerCase() == medicineName.toLowerCase());
+          } catch (_) {}
+        }
+
+        if (medicineToUpdate != null) {
+          // A. Update Stock in DB
+          await _medicineController.markMedicineAsTaken(medicineToUpdate);
+
+          // B. Trigger Refill Check (System Notification + Dashboard Log)
+          await RefillAlertService.checkStockAfterTaken(medicineToUpdate);
+        }
+      } catch (e) {
+        print("Stock update error: $e");
+      }
+    }
+
+    // --- SKIP LOGIC ---
+    else if (action == "Skip") {
+      title = "Skipped ⚠️";
+      body = "You skipped $medicineName.";
+
+      ActivityLogService.addLog(NotificationEntry(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: "Medicine Skipped",
+        message: "You skipped $medicineName",
+        time: timeStr,
+        type: NotificationType.skipped,
+      ));
+
+      if (medicineId.isNotEmpty) {
+        MedicineLogService().logAction(medicineId, "skipped");
+      }
     // ============================================================
     // 🛠️ SMART FIX: ID Failed? Try Name!
     // ============================================================
@@ -198,6 +293,82 @@ class _AlarmScreenState extends State<AlarmScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          child: Container(
+            height: size.height - MediaQuery.of(context).padding.top,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                Text(
+                  currentTime,
+                  style: const TextStyle(
+                    fontSize: 55,
+                    fontWeight: FontWeight.w400,
+                    color: Colors.black87,
+                    height: 1.0,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  currentDate,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Colors.black54,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 25),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8EAF6),
+                      borderRadius: BorderRadius.circular(35),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        )
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Medicine time",
+                          style: TextStyle(
+                            fontSize: 24,
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Container(
+                          height: 140,
+                          width: 140,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 4),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.1),
+                                blurRadius: 15,
+                                offset: const Offset(0, 8),
+                              )
+                            ],
+                          ),
+                          child: ClipOval(
+                            child: (imagePath.isNotEmpty &&
+                                    File(imagePath).existsSync())
+                                ? Image.file(File(imagePath), fit: BoxFit.cover)
+                                : const Icon(Icons.medication,
+                                    size: 60, color: Colors.grey),
+                          ),
         child: Stack(
           children: [
             SingleChildScrollView(

@@ -48,6 +48,8 @@ class NotificationService {
               '/inviteScreen',
               arguments: details.payload,
             );
+          } else if (details.payload == "refill_alert") {
+            // Handle refill alert click
           } else {
             _navigatorKey!.currentState!.pushNamed(
               '/alarm',
@@ -74,7 +76,6 @@ class NotificationService {
     await _notificationsPlugin.cancelAll();
   }
 
-  // --- CONFIRMATION NOTIFICATION ---
   static Future<void> showConfirmationNotification(
       String title, String body) async {
     const AndroidNotificationDetails androidDetails =
@@ -95,6 +96,46 @@ class NotificationService {
       title,
       body,
       details,
+    );
+  }
+
+  // ✅ FIXED: Now accepts 2 arguments (medicineName, medicineId)
+  static Future<void> showRefillAlert(
+      String medicineName, String medicineId) async {
+    final BigTextStyleInformation bigTextStyleInformation =
+        BigTextStyleInformation(
+      'Your $medicineName is finished! Please refill immediately.',
+      htmlFormatBigText: true,
+      contentTitle: '<b>Medicine Finished ❌</b>',
+      htmlFormatContentTitle: true,
+      summaryText: 'Critical Alert',
+      htmlFormatSummaryText: true,
+    );
+
+    final AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+      'refill_alert_v2',
+      'Refill Alerts',
+      channelDescription: 'Critical alerts for low medicine stock',
+      importance: Importance.max,
+      priority: Priority.max,
+      color: Colors.red,
+      playSound: true,
+      enableVibration: true,
+      visibility: NotificationVisibility.public,
+      styleInformation: bigTextStyleInformation,
+    );
+
+    final NotificationDetails details =
+        NotificationDetails(android: androidDetails);
+
+    // Using medicineId.hashCode prevents duplicates
+    await _notificationsPlugin.show(
+      medicineId.hashCode,
+      'Medicine Finished ❌',
+      'Your $medicineName is finished! Please refill immediately.',
+      details,
+      payload: "refill_alert",
     );
   }
 
@@ -168,11 +209,10 @@ class NotificationService {
         payload: payload,
       );
     } catch (e) {
-      print("Error scheduling snooze: $e");
+      // ignore error
     }
   }
 
-  // --- MAIN ALARM FUNCTION ---
   static Future<void> scheduleMedicineReminder(Medicine medicine,
       [String? ringtone]) async {
     try {
@@ -245,6 +285,9 @@ class NotificationService {
 
       final scheduledTime = _nextInstanceOfTime(hour, minute);
 
+      // Payload: Name|Dose|Instruction|PhotoPath|ID
+      String payloadData =
+          "${medicine.name}|${medicine.dose}|${medicine.instruction}|${medicine.photo ?? ''}|${medicine.id}";
       String payloadData =
           "${medicine.name}|${medicine.dose}|${medicine.instruction}|${medicine.photo ?? ''}|${medicine.id ?? ''}";
 
@@ -261,7 +304,7 @@ class NotificationService {
         matchDateTimeComponents: DateTimeComponents.time,
       );
     } catch (e) {
-      print("Error scheduling notification: $e");
+      // ignore error
     }
   }
 

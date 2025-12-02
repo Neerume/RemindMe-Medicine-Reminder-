@@ -239,10 +239,12 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
             : selectedPillCount,
         instruction: selectedInstruction,
         photo: selectedImage?.path,
-        createdAt: DateTime.now().toIso8601String(), ringtone: '',
+        createdAt: DateTime.now().toIso8601String(),
+        ringtone: '',
       );
 
-      bool success = await medicineControllerApi.addMedicine(med);
+      bool success =
+          await medicineControllerApi.addMedicine(med, null) == 'Success';
       await NotificationService.scheduleMedicineReminder(med, selectedRingtone);
 
       if (!mounted) return;

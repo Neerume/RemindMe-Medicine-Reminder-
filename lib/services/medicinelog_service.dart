@@ -8,6 +8,21 @@ class MedicineLogService {
   Future<bool> logAction(String medicineId, String action) async {
     try {
       final token = await UserDataService.getToken();
+
+      if (token == null || token.isEmpty) {
+        print("❌ No token found");
+        return false;
+      }
+
+      if (ApiConfig.logAction == null || ApiConfig.logAction!.isEmpty) {
+        print("❌ API URL logAction is NULL");
+        return false;
+      }
+
+      print("Sending medicineId: $medicineId with action: $action");
+
+      final response = await http.post(
+        Uri.parse(ApiConfig.logAction!), // FIXED
       print("Sending medicineId: $medicineId with action: $action");
 
       final response = await http.post(
@@ -27,6 +42,7 @@ class MedicineLogService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
 
+        // Add activity log locally
         // Add to in-app activity log
         ActivityLogService.addLog(
           NotificationEntry(
@@ -40,6 +56,10 @@ class MedicineLogService {
 
         return data['success'] == true;
       }
+
+      return false;
+    } catch (e) {
+      print("❌ Error logging action: $e");
       return false;
     } catch (e) {
       print("Error logging action: $e");
