@@ -1,8 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../Controller/medicineController.dart';
+import '../Controller/medicineController.dart'; // Ensure this filename matches your project
 import '../Model/medicine.dart';
-// Import the new screen
 import 'edit_medicine_screen.dart';
 
 class ViewAllMedicinesScreen extends StatefulWidget {
@@ -46,12 +45,19 @@ class _ViewAllMedicinesScreenState extends State<ViewAllMedicinesScreen> {
             style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFF48FB1)),
             onPressed: () async {
-              Navigator.pop(ctx);
-              bool success = await _medicineController.deleteMedicine(id);
+              Navigator.pop(ctx); // Close dialog
+
+              // ✅ FIXED LINE: Checks if the result equals 'Success'
+              bool success =
+                  await _medicineController.deleteMedicine(id) == 'Success';
+
               if (success && mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text("Deleted successfully")));
                 _refreshMedicines();
+              } else if (!success && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Failed to delete medicine")));
               }
             },
             child: const Text("Delete", style: TextStyle(color: Colors.white)),
@@ -61,7 +67,7 @@ class _ViewAllMedicinesScreenState extends State<ViewAllMedicinesScreen> {
     );
   }
 
-  // --- NEW: Navigation to Edit Screen ---
+  // Navigation to Edit Screen
   void _navigateToEdit(Medicine med) async {
     final result = await Navigator.push(
       context,
@@ -128,7 +134,6 @@ class _ViewAllMedicinesScreenState extends State<ViewAllMedicinesScreen> {
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      // Fixed deprecated withOpacity
                       color: Colors.white.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(15),
                       boxShadow: [
@@ -138,12 +143,11 @@ class _ViewAllMedicinesScreenState extends State<ViewAllMedicinesScreen> {
                             offset: const Offset(0, 3))
                       ],
                     ),
-                    // Wrap the card content in Material & InkWell for tap effect
                     child: Material(
                       color: Colors.transparent,
                       borderRadius: BorderRadius.circular(15),
                       child: InkWell(
-                        onTap: () => _navigateToEdit(med), // Tap to Edit
+                        onTap: () => _navigateToEdit(med),
                         borderRadius: BorderRadius.circular(15),
                         child: Row(
                           children: [
@@ -202,8 +206,7 @@ class _ViewAllMedicinesScreenState extends State<ViewAllMedicinesScreen> {
                                             fontSize: 13,
                                             fontWeight: FontWeight.bold)),
                                     const SizedBox(height: 5),
-                                    Text(
-                                        "Tap to view details & edit", // Hint text
+                                    Text("Tap to view details & edit",
                                         style: TextStyle(
                                             color: Colors.pink[300],
                                             fontSize: 11,

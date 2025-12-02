@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+// Ensure this package is in your pubspec.yaml
 import 'package:audioplayers/audioplayers.dart';
+
 import '../Model/medicine.dart';
-import '../Controller/medicineController.dart';
+import '../Controller/medicineController.dart'; // Ensure filename matches exactly
 import '../services/notification_service.dart';
 
 class EditMedicineScreen extends StatefulWidget {
@@ -59,11 +61,13 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
     // 1. Initialize Controllers with existing text
     medicineController = TextEditingController(text: med.name);
 
-    // Check if the dose is one of our dropdown options, if not put it in text field
+    // Check if the dose is one of our dropdown options
     if (doseOptions.contains(med.dose)) {
       selectedDose = med.dose;
-      doseController = TextEditingController();
+      doseController =
+          TextEditingController(); // Empty if selecting from dropdown
     } else {
+      // If custom dose, put it in text field and set dropdown to first option (placeholder)
       doseController = TextEditingController(text: med.dose);
     }
 
@@ -74,24 +78,29 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
     if (instructions.contains(med.instruction))
       selectedInstruction = med.instruction;
 
+    // Ensure we keep the existing ringtone if possible
+    if (ringtoneOptions.contains(med.ringtone)) {
+      selectedRingtone = med.ringtone;
+    }
+
     // 3. Initialize Image
     if (med.photo != null && med.photo!.isNotEmpty) {
       selectedImage = XFile(med.photo!);
     }
 
-    // 4. Initialize Time (Parse "07:30 AM" back to TimeOfDay)
+    // 4. Initialize Time
     _parseTime(med.time);
   }
 
   void _parseTime(String timeString) {
     try {
-      // Format expected: "07:30 AM"
+      // Format expected: "07:30 AM" or "7:30 AM"
       final parts = timeString.split(" ");
       final timeParts = parts[0].split(":");
 
       int hour = int.parse(timeParts[0]);
       int minute = int.parse(timeParts[1]);
-      final period = parts[1];
+      final period = parts.length > 1 ? parts[1] : "AM";
 
       if (period == "PM" && hour != 12) hour += 12;
       if (period == "AM" && hour == 12) hour = 0;
@@ -128,10 +137,12 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
   }
 
   String formatTime(TimeOfDay t) {
-    final hour = t.hourOfPeriod.toString().padLeft(2, '0');
+    final hour =
+        t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod; // Handle 00:xx as 12:xx
+    final hourStr = hour.toString().padLeft(2, '0');
     final minute = t.minute.toString().padLeft(2, '0');
     final period = t.period == DayPeriod.am ? "AM" : "PM";
-    return "$hour:$minute $period";
+    return "$hourStr:$minute $period";
   }
 
   Future<void> pickImage(ImageSource source) async {
@@ -153,6 +164,10 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
     try {
       String primaryTime = formatTime(selectedAlarms[0]);
 
+      // Determine final dose value
+      String finalDose =
+          doseController.text.isNotEmpty ? doseController.text : selectedDose;
+
       // Create updated object
       final updatedMed = Medicine(
         id: widget.medicine.id, // KEEP ORIGINAL ID
@@ -160,23 +175,26 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
         name: medicineController.text,
         time: primaryTime,
         repeat: selectedRepeat,
-        dose:
-            doseController.text.isNotEmpty ? doseController.text : selectedDose,
+        dose: finalDose,
         pillCount: pillCountController.text,
         instruction: selectedInstruction,
         photo: selectedImage?.path,
-        createdAt: widget.medicine.createdAt, ringtone: '',
+        createdAt: widget.medicine.createdAt,
+        ringtone: selectedRingtone, // Preserve the ringtone
       );
 
-      // Call API
-      bool success =
+      // ✅ FIX IS HERE: Don't cast to bool. Check if result == "Success"
+      String result =
           await medicineControllerApi.updateMedicine(updatedMed.id, updatedMed);
+      bool success = result == "Success";
 
-      // Reschedule Notification
-      await NotificationService
-          .cancelAll(); // Optional: Cancel specific ID if possible, or clear all and re-add in real app
-      await NotificationService.scheduleMedicineReminder(
-          updatedMed, selectedRingtone);
+      if (success) {
+        // Reschedule Notification only if update was successful
+        await NotificationService
+            .cancelAll(); // Or handle specific ID cancellation
+        await NotificationService.scheduleMedicineReminder(
+            updatedMed, selectedRingtone);
+      }
 
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -188,7 +206,7 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
         Navigator.pop(context, true); // Return true to refresh list
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Failed to update medicine")),
+          SnackBar(content: Text("Failed to update: $result")),
         );
       }
     } catch (e) {
@@ -214,7 +232,7 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
-          BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 5)
+          BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 5)
         ],
       ),
       child: ListTile(
@@ -413,7 +431,7 @@ class _EditMedicineScreenState extends State<EditMedicineScreen> {
       color: Colors.white,
       borderRadius: BorderRadius.circular(15),
       boxShadow: [
-        BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 10)
+        BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)
       ],
     );
   }

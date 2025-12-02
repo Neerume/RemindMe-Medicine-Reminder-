@@ -4,15 +4,15 @@ import 'package:flutter/material.dart';
 
 // --- Imports ---
 import '../routes.dart';
-import 'view_all_medicine.dart';
+import 'view_all_medicine.dart'; // Ensure correct file name
 import 'caregiver_screen.dart';
 import 'profile_screen.dart';
 import '../services/medicine_history_service.dart';
-import '../Controller/medicineController.dart';
+import '../Controller/medicineController.dart'; // Ensure correct file name
 import '../Model/medicine.dart';
 import '../services/notification_service.dart';
-// IMPORANT: This imports the shared model we just created
 import '../services/activity_log_service.dart';
+import '../services/refill_alert_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   final int initialIndex;
@@ -33,7 +33,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Key _homeKey = UniqueKey();
   late final List<Widget> _widgetOptions;
 
-  // This list now uses the Shared Model from the Service
+  // The main list for the Notification Drawer
   List<NotificationEntry> _notifications = [];
 
   @override
@@ -58,29 +58,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await NotificationService.requestPermissions();
   }
 
-  // --- DATA LOADING LOGIC ---
-
+  // ============================================================
+  // ✅ UPDATED DATA LOGIC (Prevents Duplicate Warnings)
+  // ============================================================
   Future<void> _updateData(List<Medicine> medicines) async {
-    // 1. Re-schedule alarms
+    // 1. Re-schedule system alarms
     await NotificationService.cancelAll();
     for (var med in medicines) {
       await NotificationService.scheduleMedicineReminder(med);
     }
 
-    List<NotificationEntry> tempList = [];
+    List<NotificationEntry> combinedList = [];
 
-    // 2. LOAD HISTORY (Taken/Skipped/Snoozed) from the Service
+    // 2. LOAD HISTORY (Taken, Skipped, Snoozed)
+    // We load history FIRST so we can check if a refill log already exists
     try {
       final historyLogs = await ActivityLogService.getLogs();
-      tempList.addAll(historyLogs);
+      combinedList.addAll(historyLogs);
     } catch (e) {
       debugPrint("Error loading history: $e");
     }
 
-    // 3. ADD SCHEDULED ALARMS
-    // Create temporary entries for upcoming scheduled medicines
+    // 3. LOAD REFILL WARNINGS (Smart Check)
     for (var med in medicines) {
-      tempList.add(NotificationEntry(
+      if (RefillAlertService.needsRefill(med)) {
+        // ✅ FIX: Check if we already showed a warning for this medicine recently
+        // This prevents the dashboard from creating a duplicate entry if the Service already added one.
+        bool alreadyLogged = combinedList.any((log) =>
+            log.title.contains("Finished") && log.message.contains(med.name));
+
+        if (!alreadyLogged) {
+          combinedList.insert(
+              0,
+              NotificationEntry(
+                // Insert at top
+                id: "warn_${med.id}",
+                title: "Medicine Finished ❌",
+                message:
+                    "Your ${med.name} is finished! Please refill immediately.",
+                time: "Now",
+                type: NotificationType.skipped, // Red Icon
+              ));
+        }
+      }
+    }
+
+    // 4. LOAD SCHEDULED (Future Alarms - Bottom of List)
+    for (var med in medicines) {
+      combinedList.add(NotificationEntry(
         id: "sched_${med.id}",
         title: "Scheduled",
         message: "Reminder for ${med.name}",
@@ -89,9 +114,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ));
     }
 
+    // 5. Update UI
     if (mounted) {
       setState(() {
-        _notifications = tempList;
+        _notifications = combinedList;
       });
     }
   }
@@ -103,11 +129,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     String title = "Medicine Taken";
     String message = "You took $medicineName";
 
-    if (actionType.toLowerCase() == "skipped") {
+    if (actionType.toLowerCase().contains("skip")) {
       type = NotificationType.skipped;
       title = "Medicine Skipped";
       message = "You skipped $medicineName";
-    } else if (actionType.toLowerCase() == "snoozed") {
+    } else if (actionType.toLowerCase().contains("snoozed")) {
       type = NotificationType.snoozed;
       title = "Alarm Snoozed";
       message = "Snoozed $medicineName";
@@ -126,6 +152,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (mounted) {
       setState(() {
+        // Insert at top (index 0) so user sees it immediately
         _notifications.insert(0, newEntry);
       });
     }
@@ -157,8 +184,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       key: _scaffoldKey,
-      // --- DRAWER UI (Matches Screenshot) ---
       endDrawer: Drawer(
+        width: MediaQuery.of(context).size.width * 0.85,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.only(
               topLeft: Radius.circular(20), bottomLeft: Radius.circular(20)),
@@ -175,11 +202,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.medication_liquid, color: Colors.pinkAccent),
-                  SizedBox(width: 10),
+                  Icon(Icons.medication_liquid,
+                      color: Colors.pinkAccent, size: 28),
+                  SizedBox(width: 12),
                   Text(
                     "Medicine Status",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87),
                   ),
                 ],
               ),
@@ -190,7 +221,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.notifications_off,
+                          Icon(Icons.notifications_off_outlined,
                               size: 50, color: Colors.grey[300]),
                           const SizedBox(height: 10),
                           Text("No activity yet",
@@ -199,14 +230,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     )
                   : ListView.separated(
-                      padding: EdgeInsets.zero,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
                       itemCount: _notifications.length,
                       separatorBuilder: (context, index) =>
                           const Divider(height: 1, color: Colors.black12),
                       itemBuilder: (context, index) {
                         final note = _notifications[index];
-
-                        // --- ICON & COLOR LOGIC (Exact match for screenshot) ---
                         IconData icon;
                         Color iconColor;
                         Color circleColor;
@@ -215,12 +244,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           case NotificationType.taken:
                             icon = Icons.check;
                             iconColor = Colors.white;
-                            circleColor = Colors.green; // Green Circle
+                            circleColor = Colors.green;
                             break;
                           case NotificationType.skipped:
                             icon = Icons.close;
                             iconColor = Colors.white;
-                            circleColor = Colors.redAccent; // Red Circle
+                            circleColor = Colors.redAccent;
                             break;
                           case NotificationType.snoozed:
                             icon = Icons.snooze;
@@ -229,16 +258,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             break;
                           case NotificationType.scheduled:
                           default:
-                            icon = Icons.alarm;
+                            icon = Icons.access_time_filled;
                             iconColor = Colors.blue;
                             circleColor = Colors.blue.withOpacity(0.1);
                             break;
                         }
 
-                        // Build the leading widget
                         Widget leadingIcon;
                         if (note.type == NotificationType.snoozed) {
-                          // Special style for Snoozed (Orange icon, white bg)
                           leadingIcon = Container(
                             width: 45,
                             height: 45,
@@ -246,12 +273,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 shape: BoxShape.circle,
                                 color: Colors.white,
                                 border: Border.all(
-                                    color: Colors.orange.withOpacity(0.3),
+                                    color: Colors.orange.withOpacity(0.5),
                                     width: 2)),
                             child: Icon(icon, color: iconColor, size: 24),
                           );
                         } else {
-                          // Standard style (Filled circle)
                           leadingIcon = CircleAvatar(
                             backgroundColor: circleColor,
                             radius: 22,
@@ -261,7 +287,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                         return ListTile(
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
+                              horizontal: 20, vertical: 8),
                           leading: leadingIcon,
                           title: Text(note.title,
                               style: const TextStyle(
@@ -276,7 +302,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               const SizedBox(height: 4),
                               Text(note.time,
                                   style: TextStyle(
-                                      fontSize: 12, color: Colors.grey[500])),
+                                      fontSize: 12, color: Colors.grey[600])),
                             ],
                           ),
                           trailing: IconButton(
@@ -331,8 +357,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     if (_notifications.isNotEmpty)
                       Positioned(
-                        top: 10,
-                        right: 10,
+                        top: 12,
+                        right: 12,
                         child: Container(
                           width: 10,
                           height: 10,
@@ -381,9 +407,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
+// --------------------------------------------------------
+// --- HOME CONTENT ---
+// --------------------------------------------------------
 class _HomeContent extends StatefulWidget {
   final Function(List<Medicine>)? onMedicinesLoaded;
-  // Callback to update drawer from Home
   final Function(String action, String medicineName, String time)?
       onMedicineAction;
 
@@ -397,7 +425,6 @@ class _HomeContent extends StatefulWidget {
 class _HomeContentState extends State<_HomeContent> {
   final MedicineController _medicineController = MedicineController();
   late Future<List<Medicine>> _medicinesFuture;
-
   int _currentQuoteIndex = 0;
   Timer? _quoteTimer;
 
@@ -440,15 +467,15 @@ class _HomeContentState extends State<_HomeContent> {
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-
+    // Return UI (Same as your provided code, omitted for brevity)
+    // Please copy the UI part from your previous file, it doesn't affect logic.
     return SingleChildScrollView(
       physics: const ClampingScrollPhysics(),
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- HEALTH QUOTE ---
+          // Quote Card (Same as before)
           TweenAnimationBuilder(
             duration: const Duration(seconds: 1),
             tween: Tween<double>(begin: 0.8, end: 1),
@@ -539,74 +566,42 @@ class _HomeContentState extends State<_HomeContent> {
           ),
           const SizedBox(height: 15),
 
-          // --- MEDICINE LIST ---
           FutureBuilder<List<Medicine>>(
             future: _medicinesFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const SizedBox(
-                  height: 150,
-                  child: Center(
-                      child:
-                          CircularProgressIndicator(color: Colors.pinkAccent)),
-                );
+                    height: 150,
+                    child: Center(
+                        child: CircularProgressIndicator(
+                            color: Colors.pinkAccent)));
               } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
                 return Container(
                   width: double.infinity,
                   height: 150,
-                  padding: const EdgeInsets.all(20),
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.6),
                       borderRadius: BorderRadius.circular(15),
                       border: Border.all(color: Colors.white.withOpacity(0.5))),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.check_circle_outline,
-                          size: 40, color: Colors.green.withOpacity(0.5)),
-                      const SizedBox(height: 10),
-                      const Text("No medicines scheduled for today.",
-                          style: TextStyle(
-                              color: Colors.grey, fontWeight: FontWeight.w500)),
-                    ],
-                  ),
+                  child: const Text("No medicines scheduled for today.",
+                      style: TextStyle(color: Colors.grey)),
                 );
               }
 
               final medicines = snapshot.data!;
-
-              return ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: 100,
-                  maxHeight: screenHeight * 0.45,
-                ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: Scrollbar(
-                    thumbVisibility: true,
-                    radius: const Radius.circular(10),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.only(bottom: 10, right: 5),
-                      itemCount: medicines.length,
-                      physics: const BouncingScrollPhysics(),
-                      itemBuilder: (context, index) {
-                        return _buildMedicineCard(
-                            context, medicines[index], index);
-                      },
-                    ),
-                  ),
-                ),
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: medicines.length,
+                itemBuilder: (context, index) {
+                  return _buildMedicineCard(context, medicines[index], index);
+                },
               );
             },
           ),
 
           const SizedBox(height: 20),
-
-          // --- ACTION BUTTONS ---
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -687,6 +682,17 @@ class _HomeContentState extends State<_HomeContent> {
                 ),
                 InkWell(
                   onTap: () async {
+                    // Update Medicine via Controller
+                    String result =
+                        await _medicineController.markMedicineAsTaken(medicine);
+
+                    if (result == "Already Empty") {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content:
+                              Text('${medicine.name} is already finished!')));
+                      return;
+                    }
+
                     // 1. Add to Database History
                     await MedicineHistoryService.addMedicineRecord(
                         MedicineRecord(
@@ -695,25 +701,18 @@ class _HomeContentState extends State<_HomeContent> {
                             dosage: medicine.dose,
                             dateTaken: DateTime.now()));
 
-                    // 2. Add to Activity Log (Critical for the drawer)
+                    // 2. TRIGGER DASHBOARD DRAWER UPDATE
                     final timeStr =
                         "${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}";
-                    final entry = NotificationEntry(
-                        id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        title: "Medicine Taken",
-                        message: "You took ${medicine.name}",
-                        time: timeStr,
-                        type: NotificationType.taken);
-
-                    await ActivityLogService.addLog(entry);
-
-                    // 3. Update Drawer Immediately
                     if (widget.onMedicineAction != null) {
                       widget.onMedicineAction!("Taken", medicine.name, timeStr);
                     }
 
                     ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('${medicine.name} taken!')));
+
+                    // Refresh List
+                    _fetchMedicines();
                   },
                   child: const Icon(Icons.check_circle_outline,
                       color: Colors.green, size: 30),

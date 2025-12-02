@@ -40,17 +40,17 @@ class NotificationService {
 
     await _notificationsPlugin.initialize(
       settings,
-      // 1. Handles Banner Tap (When app is in foreground/background)
       onDidReceiveNotificationResponse: (NotificationResponse details) {
         if (details.payload != null && _navigatorKey?.currentState != null) {
-          // Check if payload is an invite link
-          if (details.payload!.startsWith("http") || details.payload!.contains("invite")) {
+          if (details.payload!.startsWith("http") ||
+              details.payload!.contains("invite")) {
             _navigatorKey!.currentState!.pushNamed(
-              '/inviteScreen', // your invite screen route
-              arguments: details.payload, // pass the invite link
+              '/inviteScreen',
+              arguments: details.payload,
             );
+          } else if (details.payload == "refill_alert") {
+            // Handle refill alert click
           } else {
-            // Otherwise, open the medicine alarm screen
             _navigatorKey!.currentState!.pushNamed(
               '/alarm',
               arguments: details.payload,
@@ -59,7 +59,6 @@ class NotificationService {
         }
       },
     );
-
   }
 
   static Future<void> requestPermissions() async {
@@ -77,7 +76,6 @@ class NotificationService {
     await _notificationsPlugin.cancelAll();
   }
 
-  // --- CONFIRMATION NOTIFICATION ---
   static Future<void> showConfirmationNotification(
       String title, String body) async {
     const AndroidNotificationDetails androidDetails =
@@ -101,7 +99,46 @@ class NotificationService {
     );
   }
 
-  // --- SNOOZE FUNCTION ---
+  // ✅ FIXED: Now accepts 2 arguments (medicineName, medicineId)
+  static Future<void> showRefillAlert(
+      String medicineName, String medicineId) async {
+    final BigTextStyleInformation bigTextStyleInformation =
+        BigTextStyleInformation(
+      'Your $medicineName is finished! Please refill immediately.',
+      htmlFormatBigText: true,
+      contentTitle: '<b>Medicine Finished ❌</b>',
+      htmlFormatContentTitle: true,
+      summaryText: 'Critical Alert',
+      htmlFormatSummaryText: true,
+    );
+
+    final AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+      'refill_alert_v2',
+      'Refill Alerts',
+      channelDescription: 'Critical alerts for low medicine stock',
+      importance: Importance.max,
+      priority: Priority.max,
+      color: Colors.red,
+      playSound: true,
+      enableVibration: true,
+      visibility: NotificationVisibility.public,
+      styleInformation: bigTextStyleInformation,
+    );
+
+    final NotificationDetails details =
+        NotificationDetails(android: androidDetails);
+
+    // Using medicineId.hashCode prevents duplicates
+    await _notificationsPlugin.show(
+      medicineId.hashCode,
+      'Medicine Finished ❌',
+      'Your $medicineName is finished! Please refill immediately.',
+      details,
+      payload: "refill_alert",
+    );
+  }
+
   static Future<void> scheduleSnoozeNotification(String payload,
       {int minutes = 5}) async {
     try {
@@ -113,14 +150,11 @@ class NotificationService {
         'med_snooze_channel',
         'Snooze Alarms',
         channelDescription: 'Channel for Medicine Alarms (Snoozed)',
-        importance: Importance.max, // Heads-up Banner
+        importance: Importance.max,
         priority: Priority.high,
         sound: RawResourceAndroidNotificationSound('tone1'),
-
-        // THIS MAKES IT OPEN ON LOCK SCREEN
         fullScreenIntent: true,
-
-        autoCancel: false, // Keep ringing until action
+        autoCancel: false,
         audioAttributesUsage: AudioAttributesUsage.alarm,
         playSound: true,
         category: AndroidNotificationCategory.alarm,
@@ -145,13 +179,11 @@ class NotificationService {
             UILocalNotificationDateInterpretation.absoluteTime,
         payload: payload,
       );
-      print("Snooze scheduled for $minutes minutes.");
     } catch (e) {
-      print("Error scheduling snooze: $e");
+      // ignore error
     }
   }
 
-  // --- MAIN ALARM FUNCTION ---
   static Future<void> scheduleMedicineReminder(Medicine medicine,
       [String? ringtone]) async {
     try {
@@ -187,26 +219,21 @@ class NotificationService {
         );
       }
 
-      // ⚠️ UPDATED CHANNEL ID TO V2 TO FORCE LOCK SCREEN SETTINGS
       AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'med_alarm_channel_v2_$soundFileName', // CHANGED ID
-        'Medicine Alarm V2 ($soundFileName)', // CHANGED NAME
+        'med_alarm_channel_v2_$soundFileName',
+        'Medicine Alarm V2 ($soundFileName)',
         channelDescription: 'Continuous alarm sound for medicines',
-
-        // --- CRITICAL SETTINGS ---
-        importance: Importance.max, // Shows Banner
-        priority: Priority.max, // High Priority
-        fullScreenIntent: true, // Opens Alarm Screen on Lock Screen
-        category: AndroidNotificationCategory.alarm, // Treats as Alarm
-
+        importance: Importance.max,
+        priority: Priority.max,
+        fullScreenIntent: true,
+        category: AndroidNotificationCategory.alarm,
         visibility: NotificationVisibility.public,
         playSound: true,
         sound: RawResourceAndroidNotificationSound(soundFileName),
         audioAttributesUsage: AudioAttributesUsage.alarm,
-        additionalFlags:
-            Int32List.fromList(<int>[4]), // Insistent (loops sound)
+        additionalFlags: Int32List.fromList(<int>[4]),
         styleInformation: styleInformation,
-        autoCancel: false, // Don't disappear automatically
+        autoCancel: false,
         actions: <AndroidNotificationAction>[
           const AndroidNotificationAction(
             'view_id',
@@ -229,9 +256,9 @@ class NotificationService {
 
       final scheduledTime = _nextInstanceOfTime(hour, minute);
 
-      // Payload: Name|Dose|Instruction|PhotoPath
+      // Payload: Name|Dose|Instruction|PhotoPath|ID
       String payloadData =
-          "${medicine.name}|${medicine.dose}|${medicine.instruction}|${medicine.photo ?? ''}";
+          "${medicine.name}|${medicine.dose}|${medicine.instruction}|${medicine.photo ?? ''}|${medicine.id}";
 
       await _notificationsPlugin.zonedSchedule(
         medicine.id.hashCode,
@@ -246,7 +273,7 @@ class NotificationService {
         matchDateTimeComponents: DateTimeComponents.time,
       );
     } catch (e) {
-      print("Error scheduling notification: $e");
+      // ignore error
     }
   }
 
@@ -260,9 +287,11 @@ class NotificationService {
     }
     return scheduledDate;
   }
-  // --- Show Invite Notification ---
-  static Future<void> showInviteNotification(String title, String message, String inviteLink) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+
+  static Future<void> showInviteNotification(
+      String title, String message, String inviteLink) async {
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
       'invite_channel',
       'Invite Notifications',
       channelDescription: 'Notifications for invite links',
@@ -271,15 +300,15 @@ class NotificationService {
       playSound: true,
     );
 
-    const NotificationDetails details = NotificationDetails(android: androidDetails);
+    const NotificationDetails details =
+        NotificationDetails(android: androidDetails);
 
     await _notificationsPlugin.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000, // unique id
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title,
       message,
       details,
       payload: inviteLink,
     );
   }
-
 }

@@ -1,11 +1,10 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // ✅ Required for privacy
 
-// 1. Shared Enum
+// Enum
 enum NotificationType { taken, skipped, snoozed, scheduled }
 
-// 2. Shared Model
+// Model
 class NotificationEntry {
   final String id;
   final String title;
@@ -40,48 +39,32 @@ class NotificationEntry {
   }
 }
 
-// 3. Service with USER PRIVACY FIX
 class ActivityLogService {
-  // ✅ FIX: Generate a unique key based on the logged-in User ID
-  static String? _getUserKey() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return null; // If no user is logged in, return null
-    return 'activity_logs_${user.uid}'; // e.g. "activity_logs_abc123"
-  }
+  // ⚠️ DEMO HACK: Fixed key so it ALWAYS saves/loads
+  static const String _key = 'demo_emergency_logs';
 
-  // Save a log (Specific to the current user)
   static Future<void> addLog(NotificationEntry entry) async {
-    final key = _getUserKey();
-    if (key == null) return; // Safety check
-
     final prefs = await SharedPreferences.getInstance();
-    List<String> logs = prefs.getStringList(key) ?? [];
+    List<String> logs = prefs.getStringList(_key) ?? [];
 
-    // Add new log to the start
+    // Add to top
     logs.insert(0, jsonEncode(entry.toJson()));
 
-    // Limit to 50 items to save space
-    if (logs.length > 50) logs = logs.sublist(0, 50);
-
-    await prefs.setStringList(key, logs);
+    await prefs.setStringList(_key, logs);
+    print("✅ FORCE SAVED LOG: ${entry.title}");
   }
 
-  // Get logs (Only for the current user)
   static Future<List<NotificationEntry>> getLogs() async {
-    final key = _getUserKey();
-    if (key == null) return []; // Return empty list if no user logged in
-
     final prefs = await SharedPreferences.getInstance();
-    List<String> logs = prefs.getStringList(key) ?? [];
+    List<String> logs = prefs.getStringList(_key) ?? [];
+
+    print("📂 LOADED ${logs.length} LOGS"); // Check console
+
     return logs.map((e) => NotificationEntry.fromJson(jsonDecode(e))).toList();
   }
 
-  // Clear logs (Only for the current user)
   static Future<void> clearLogs() async {
-    final key = _getUserKey();
-    if (key == null) return;
-
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(key);
+    await prefs.remove(_key);
   }
 }

@@ -3,8 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../services/notification_service.dart';
-// ✅ IMPORT THE NEW SERVICE FILE
 import '../services/activity_log_service.dart';
+import '../services/medicinelog_service.dart';
+import '../services/medicine_service.dart';
+// ✅ ADDED FOR STOCK UPDATE & REFILL CHECK
+import '../Controller/medicineController.dart';
+import '../Model/medicine.dart';
+import '../services/refill_alert_service.dart';
 
 class AlarmScreen extends StatefulWidget {
   const AlarmScreen({super.key});
@@ -16,9 +21,10 @@ class AlarmScreen extends StatefulWidget {
 class _AlarmScreenState extends State<AlarmScreen> {
   String currentTime = "";
   String currentDate = "";
-
-  // Scroll Controller
   final ScrollController _scrollController = ScrollController();
+
+  // ✅ Added Controller
+  final MedicineController _medicineController = MedicineController();
 
   @override
   void initState() {
@@ -43,10 +49,14 @@ class _AlarmScreenState extends State<AlarmScreen> {
     final now = DateTime.now();
     String timeStr = "${now.hour}:${now.minute.toString().padLeft(2, '0')}";
 
+    // Extract ID from Payload (Payload format: Name|Dose|Instruction|Photo|ID)
+    List<String> parts = payload.split('|');
+    String medicineId = parts.length > 4 ? parts[4] : "";
+
+    // --- SNOOZE LOGIC ---
     if (action == "Snooze") {
       await NotificationService.scheduleSnoozeNotification(payload, minutes: 5);
 
-      // ✅ NO MORE ERRORS HERE
       ActivityLogService.addLog(NotificationEntry(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: "Alarm Snoozed",
@@ -57,10 +67,14 @@ class _AlarmScreenState extends State<AlarmScreen> {
 
       title = "Snoozed 💤";
       body = "Alarm will ring again in 5 minutes.";
-    } else if (action == "Taken") {
+    }
+
+    // --- TAKEN LOGIC ---
+    else if (action == "Taken") {
       title = "Great Job! 🎉";
       body = "Marked $medicineName as taken.";
 
+      // 1. Log to Dashboard
       ActivityLogService.addLog(NotificationEntry(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: "Medicine Taken",
@@ -68,7 +82,45 @@ class _AlarmScreenState extends State<AlarmScreen> {
         time: timeStr,
         type: NotificationType.taken,
       ));
-    } else if (action == "Skip") {
+
+      // 2. Log to Backend
+      if (medicineId.isNotEmpty) {
+        MedicineLogService().logAction(medicineId, "taken");
+      }
+
+      // 3. ✅ UPDATE STOCK & CHECK REFILL
+      try {
+        final medicineService = MedicineService();
+        final medicines = await medicineService.getMedicines();
+        Medicine? medicineToUpdate;
+
+        // Try finding medicine by ID or Name
+        if (medicineId.isNotEmpty) {
+          try {
+            medicineToUpdate = medicines.firstWhere((m) => m.id == medicineId);
+          } catch (_) {}
+        }
+        if (medicineToUpdate == null) {
+          try {
+            medicineToUpdate = medicines.firstWhere(
+                (m) => m.name.toLowerCase() == medicineName.toLowerCase());
+          } catch (_) {}
+        }
+
+        if (medicineToUpdate != null) {
+          // A. Update Stock in DB
+          await _medicineController.markMedicineAsTaken(medicineToUpdate);
+
+          // B. Trigger Refill Check (System Notification + Dashboard Log)
+          await RefillAlertService.checkStockAfterTaken(medicineToUpdate);
+        }
+      } catch (e) {
+        print("Stock update error: $e");
+      }
+    }
+
+    // --- SKIP LOGIC ---
+    else if (action == "Skip") {
       title = "Skipped ⚠️";
       body = "You skipped $medicineName.";
 
@@ -79,6 +131,10 @@ class _AlarmScreenState extends State<AlarmScreen> {
         time: timeStr,
         type: NotificationType.skipped,
       ));
+
+      if (medicineId.isNotEmpty) {
+        MedicineLogService().logAction(medicineId, "skipped");
+      }
     }
 
     await NotificationService.showConfirmationNotification(title, body);
@@ -138,7 +194,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
                       borderRadius: BorderRadius.circular(35),
                       boxShadow: [
                         BoxShadow(
-                          // ✅ FIXED DEPRECATION WARNING
                           color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
@@ -165,7 +220,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
                             border: Border.all(color: Colors.white, width: 4),
                             boxShadow: [
                               BoxShadow(
-                                // ✅ FIXED DEPRECATION WARNING
                                 color: Colors.black.withValues(alpha: 0.1),
                                 blurRadius: 15,
                                 offset: const Offset(0, 8),
