@@ -11,6 +11,7 @@ import 'package:gal/gal.dart';
 
 import '../Controller/userController.dart';
 import '../Model/user.dart';
+import '../services/report_service.dart';
 import '../services/user_data_service.dart';
 import '../routes.dart';
 
@@ -134,37 +135,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
     'medList': <String>[]
   };
 
-  Future<void> _generateReportData() async {
-    await Future.delayed(const Duration(seconds: 1));
+  Future<void> _generateReportData({int? month, int? year}) async {
+    setState(() => _isLoading = true);
 
-    reportStats = {
-      'totalMeds': 15,
-      'takenCount': 12,
-      'missedCount': 3,
-      'adherence': '80%',
-      'medList': [
-        'Paracetamol (Morning)',
-        'Vitamin D (After Meal)',
-        'Amoxicillin (Night)',
-        'Aspirin (Afternoon)'
-      ]
-    };
+    try {
+      final report = await ReportService.generateReport(month: month, year: year);
+      // Map API response to your reportStats
+      reportStats = {
+        'totalMeds': report['totalMeds'] ?? 0,
+        'takenCount': report['takenCount'] ?? 0,
+        'missedCount': report['missedCount'] ?? 0,
+        'adherence': report['adherence'] ?? '0%',
+        'medList': List<String>.from(report['medList'] ?? []),
+      };
+      debugPrint("Report response: $report");
+    } catch (e) {
+      debugPrint("Error fetching report: $e");
+      reportStats = {
+        'totalMeds': 0,
+        'takenCount': 0,
+        'missedCount': 0,
+        'adherence': '0%',
+        'medList': [],
+      };
+    }
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
   }
 
-  void _showReportPreview() async {
+  void _showReportPreview({int? month, int? year}) async {
     setState(() => _isLoading = true);
-    await _generateReportData();
+
+    try {
+      final response = await ReportService.generateReport(month: month, year: year);
+
+      if (response['success'] == true && response['report'] != null) {
+        final report = response['report'];
+
+        // Map the backend keys correctly
+        reportStats = {
+          'totalMeds': report['totalMeds'] ?? 0,
+          'takenCount': report['takenCount'] ?? 0,
+          'missedCount': report['skippedCount'] ?? 0, // map skipped → missed
+          'adherence': report['adherence'] ?? '0%',
+          'medList': List<String>.from(
+              report['medList']?.map((e) => e['name'] ?? '') ?? []),
+        };
+      }
+    } catch (e) {
+      debugPrint("Error fetching report: $e");
+      reportStats = {
+        'totalMeds': 0,
+        'takenCount': 0,
+        'missedCount': 0,
+        'adherence': '0%',
+        'medList': [],
+      };
+    }
 
     if (!mounted) return;
     setState(() => _isLoading = false);
 
+    // Show the dialog after updating reportStats
     showDialog(
       context: context,
       builder: (context) {
         return Dialog(
           insetPadding: const EdgeInsets.all(10),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -174,6 +213,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: _buildReportWidget(),
                 ),
                 const SizedBox(height: 20),
+                // Buttons for saving/sharing
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Row(
@@ -207,6 +247,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       },
     );
   }
+
 
   Future<void> _shareReport(BuildContext dialogContext) async {
     try {
@@ -287,7 +328,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: 50,
                   height: 50,
                   errorBuilder: (c, o, s) =>
-                      const Icon(Icons.health_and_safety)),
+                  const Icon(Icons.health_and_safety)),
             ],
           ),
           const Divider(thickness: 2, height: 30),
@@ -296,10 +337,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               CircleAvatar(
                 radius: 30,
                 backgroundImage: _profileImage != null
-                    ? FileImage(_profileImage!)
+                    ? FileImage(_profileImage!) as ImageProvider?
                     : (backendPhotoBase64 != null
-                        ? MemoryImage(base64Decode(backendPhotoBase64!))
-                        : null) as ImageProvider?,
+                    ? MemoryImage(base64Decode(backendPhotoBase64!))
+                as ImageProvider?
+                    : null),
                 child: (_profileImage == null && backendPhotoBase64 == null)
                     ? const Icon(Icons.person)
                     : null,
@@ -313,7 +355,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           fontSize: 18, fontWeight: FontWeight.bold)),
                   Text("Phone: ${_phoneController.text}",
                       style:
-                          const TextStyle(fontSize: 14, color: Colors.black54)),
+                      const TextStyle(fontSize: 14, color: Colors.black54)),
                   Text("Period: $dateStr",
                       style: const TextStyle(
                           fontSize: 14, color: Colors.blueGrey)),
@@ -347,11 +389,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               children: [
                 ...(reportStats['medList'] as List).map((medName) => ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.medication,
-                          color: Color(0xffFF9FA0)),
-                      title: Text(medName),
-                    )),
+                  dense: true,
+                  leading: const Icon(Icons.medication,
+                      color: Color(0xffFF9FA0)),
+                  title: Text(medName),
+                )),
                 if ((reportStats['medList'] as List).isEmpty)
                   const Padding(
                       padding: EdgeInsets.all(12),
@@ -428,135 +470,135 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              child: Center(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Center(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text('Profile',
-                              style: TextStyle(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.black87)),
-                          SizedBox(height: 6),
-                          Text('Update how caregivers reach you',
-                              style: TextStyle(
-                                  fontSize: 15, color: Colors.black54)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 58,
-                          backgroundColor:
-                              Colors.redAccent.withValues(alpha: 0.2),
-                          backgroundImage: _profileImage != null
-                              ? FileImage(_profileImage!)
-                              : (backendPhotoBase64 != null
-                                  ? MemoryImage(
-                                      base64Decode(backendPhotoBase64!))
-                                  : null) as ImageProvider<Object>?,
-                          child: (_profileImage == null &&
-                                  backendPhotoBase64 == null)
-                              ? Icon(Icons.person_rounded,
-                                  size: 68,
-                                  color: Theme.of(context).primaryColor)
-                              : null,
-                        ),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: GestureDetector(
-                            onTap: _pickImage,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xffFF9FA0),
-                                shape: BoxShape.circle,
-                                border:
-                                    Border.all(color: Colors.white, width: 3),
-                              ),
-                              child: const Icon(Icons.camera_alt_rounded,
-                                  color: Colors.white, size: 20),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    _buildProfileField(
-                        controller: _usernameController,
-                        label: 'Username',
-                        icon: Icons.person,
-                        enabled: _isEditing),
-                    const SizedBox(height: 18),
-                    _buildProfileField(
-                        controller: _phoneController,
-                        label: 'Phone',
-                        icon: Icons.phone,
-                        enabled: _isEditing,
-                        keyboardType: TextInputType.phone),
-                    const SizedBox(height: 28),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isEditing
-                            ? _saveProfile
-                            : () => setState(() => _isEditing = true),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xffFF9FA0),
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20)),
-                        ),
-                        child: Text(
-                            _isEditing ? 'Save Changes' : 'Edit Profile',
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    if (!_isEditing)
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _showReportPreview,
-                          icon: const Icon(Icons.summarize_outlined,
-                              color: Colors.black87),
-                          label: const Text("Generate 1 Month Report",
-                              style: TextStyle(
-                                  color: Colors.black87,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16)),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            side: const BorderSide(color: Colors.black26),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20)),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 20),
-                    TextButton.icon(
-                      onPressed: _logout,
-                      icon: const Icon(Icons.logout, color: Colors.redAccent),
-                      label: const Text('Logout',
-                          style: TextStyle(
-                              color: Colors.redAccent,
-                              fontWeight: FontWeight.w600)),
-                    ),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text('Profile',
+                        style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87)),
+                    SizedBox(height: 6),
+                    Text('Update how caregivers reach you',
+                        style: TextStyle(
+                            fontSize: 15, color: Colors.black54)),
                   ],
                 ),
               ),
-            ),
+              const SizedBox(height: 20),
+              Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 58,
+                    backgroundColor:
+                    Colors.redAccent.withOpacity(0.2),
+                    backgroundImage: _profileImage != null
+                        ? FileImage(_profileImage!) as ImageProvider?
+                        : (backendPhotoBase64 != null
+                        ? MemoryImage(base64Decode(backendPhotoBase64!))
+                    as ImageProvider?
+                        : null),
+                    child: (_profileImage == null &&
+                        backendPhotoBase64 == null)
+                        ? Icon(Icons.person_rounded,
+                        size: 68,
+                        color: Theme.of(context).primaryColor)
+                        : null,
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: GestureDetector(
+                      onTap: _pickImage,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xffFF9FA0),
+                          shape: BoxShape.circle,
+                          border:
+                          Border.all(color: Colors.white, width: 3),
+                        ),
+                        child: const Icon(Icons.camera_alt_rounded,
+                            color: Colors.white, size: 20),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _buildProfileField(
+                  controller: _usernameController,
+                  label: 'Username',
+                  icon: Icons.person,
+                  enabled: _isEditing),
+              const SizedBox(height: 18),
+              _buildProfileField(
+                  controller: _phoneController,
+                  label: 'Phone',
+                  icon: Icons.phone,
+                  enabled: _isEditing,
+                  keyboardType: TextInputType.phone),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isEditing
+                      ? _saveProfile
+                      : () => setState(() => _isEditing = true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xffFF9FA0),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
+                  ),
+                  child: Text(
+                      _isEditing ? 'Save Changes' : 'Edit Profile',
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 15),
+              if (!_isEditing)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _showReportPreview,
+                    icon: const Icon(Icons.summarize_outlined,
+                        color: Colors.black87),
+                    label: const Text("Generate 1 Month Report",
+                        style: TextStyle(
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: const BorderSide(color: Colors.black26),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20)),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 20),
+              TextButton.icon(
+                onPressed: _logout,
+                icon: const Icon(Icons.logout, color: Colors.redAccent),
+                label: const Text('Logout',
+                    style: TextStyle(
+                        color: Colors.redAccent,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -564,7 +606,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required TextEditingController controller,
     required String label,
     required IconData icon,
-    bool enabled = true,
+    bool enabled = false,
     TextInputType keyboardType = TextInputType.text,
   }) {
     return TextField(
@@ -574,9 +616,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-        filled: !enabled,
-        fillColor: enabled ? Colors.white : const Color(0xfff4f5f8),
+        filled: true,
+        fillColor: enabled ? Colors.white : Colors.grey[200],
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

@@ -8,6 +8,8 @@ class UserDataService {
   static const String _keyInviteInviterId = 'invite_inviter_id';
   static const String _keyInviteRole = 'invite_role';
   static const String _keyInviteInviterName = 'invite_inviter_name';
+  static const String _keyMongoId = 'user_mongo_id';
+
 
   // ---------------- Token ----------------
   static Future<void> saveToken(String token) async {
@@ -26,7 +28,8 @@ class UserDataService {
   }
 
   // ---------------- User Data ----------------
-  static Future<void> saveUserData({required String phone, required String username}) async {
+  static Future<void> saveUserData(
+      {required String phone, required String username}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyPhone, phone);
     await prefs.setString(_keyUsername, username);
@@ -84,4 +87,30 @@ class UserDataService {
     await prefs.remove(_keyInviteRole);
     await prefs.remove(_keyInviteInviterName);
   }
+
+  // Mark that a new connection has been synced
+  static Future<void> markNewConnectionSynced() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('newConnectionSynced', true);
+  }
+
+    // Optional: check if a new connection was synced
+    static Future<bool> isNewConnectionSynced() async {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('newConnectionSynced') ?? false;
+    }
+  // Optional: check if a new connection was synced
+  static Future<bool> isNewConnectionSynced() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('newConnectionSynced') ?? false;
+  }
+  static Future<void> saveMongoId(String mongoId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyMongoId, mongoId);
+  }
+  static Future<String?> getMongoId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyMongoId);
+  }
+
 }

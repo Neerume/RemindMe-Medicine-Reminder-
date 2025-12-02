@@ -23,6 +23,10 @@ class MedicineLogService {
 
       final response = await http.post(
         Uri.parse(ApiConfig.logAction!), // FIXED
+      print("Sending medicineId: $medicineId with action: $action");
+
+      final response = await http.post(
+        Uri.parse(ApiConfig.logAction),
         headers: {
           "Authorization": "Bearer $token",
           "Content-Type": "application/json",
@@ -39,6 +43,7 @@ class MedicineLogService {
         final data = jsonDecode(response.body);
 
         // Add activity log locally
+        // Add to in-app activity log
         ActivityLogService.addLog(
           NotificationEntry(
             id: medicineId,
@@ -55,6 +60,9 @@ class MedicineLogService {
       return false;
     } catch (e) {
       print("❌ Error logging action: $e");
+      return false;
+    } catch (e) {
+      print("Error logging action: $e");
       return false;
     }
   }

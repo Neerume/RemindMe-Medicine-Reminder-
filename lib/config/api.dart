@@ -1,4 +1,5 @@
 class ApiConfig {
+  // ✅ YOUR RENDER BACKEND URL
   static const String baseUrl = "https://remindme-backend-x1qd.onrender.com";
 
   // Auth endpoints
@@ -8,6 +9,7 @@ class ApiConfig {
   static const String getProfile = "$baseUrl/api/auth/profile";
   static const String updateProfile = "$baseUrl/api/auth/update";
 
+  // Medicine endpoints
   static const String addMedicine = "$baseUrl/api/medicine/addMedicine";
   static const String viewMedicine = "$baseUrl/api/medicine/getMedicine";
   static const String updateMedicine = "$baseUrl/api/medicine/updateMedicine";
@@ -28,4 +30,15 @@ class ApiConfig {
   static String? get logAction => null;
 
   static get getReport => null;
+
+  // ✅ THIS EXACT NAME MUST MATCH THE SERVICE FILE
+  static const String respondInvite = "$baseUrl/api/relationship/respond";
+
+  static const String getCaregivers = "$baseUrl/api/relationship/caregivers";
+  static const String getPatients = "$baseUrl/api/relationship/patients";
+  static const String deleteRelation = "$baseUrl/api/relationship/delete";
+
+  // Log endpoints
+  static const String logAction = "$baseUrl/api/medicine/action";
+  static const String getReport = "$baseUrl/api/medicine/report";
 }

@@ -139,6 +139,35 @@ class NotificationService {
     );
   }
 
+  // --- NEW: REFILL ALERT NOTIFICATION (ADDED THIS) ---
+  static Future<void> showRefillNotification(String title, String body) async {
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+      'med_refill_channel', // Unique Channel ID
+      'Refill Alerts', // Channel Name
+      channelDescription: 'Alerts when medicine stock is low',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      color: Colors.red, // Show red color for urgency
+      enableVibration: true,
+    );
+
+    const NotificationDetails details =
+        NotificationDetails(android: androidDetails);
+
+    // Using a random ID ensures multiple alerts can stack
+    int notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+    await _notificationsPlugin.show(
+      notificationId,
+      title,
+      body,
+      details,
+    );
+  }
+
+  // --- SNOOZE FUNCTION ---
   static Future<void> scheduleSnoozeNotification(String payload,
       {int minutes = 5}) async {
     try {
@@ -259,6 +288,8 @@ class NotificationService {
       // Payload: Name|Dose|Instruction|PhotoPath|ID
       String payloadData =
           "${medicine.name}|${medicine.dose}|${medicine.instruction}|${medicine.photo ?? ''}|${medicine.id}";
+      String payloadData =
+          "${medicine.name}|${medicine.dose}|${medicine.instruction}|${medicine.photo ?? ''}|${medicine.id ?? ''}";
 
       await _notificationsPlugin.zonedSchedule(
         medicine.id.hashCode,
