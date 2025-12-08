@@ -61,14 +61,10 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
 
   // --- Helper Methods ---
 
-  // UPDATED METHOD HERE
   Future<void> playRingtone(String ringtoneName) async {
-    // 1. Stop any currently playing sound
     await audioPlayer.stop();
 
     String filePath = "";
-    // Note: When using AssetSource, do NOT include 'assets/' prefix.
-    // The package adds it automatically.
     if (ringtoneName == "Tone 1") filePath = "sounds/tone1.wav";
     if (ringtoneName == "Tone 2") filePath = "sounds/tone2.wav";
     if (ringtoneName == "Tone 3") filePath = "sounds/tone3.wav";
@@ -76,19 +72,11 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
 
     if (filePath.isNotEmpty) {
       try {
-        // 2. Set source first (helps with buffering on some devices)
         await audioPlayer.setSource(AssetSource(filePath));
-
-        // 3. Set volume to max to ensure we can hear it
         await audioPlayer.setVolume(1.0);
-
-        // 4. Play
         await audioPlayer.resume();
-
-        print("Playing sound from: assets/$filePath"); // Debug print
       } catch (e) {
         print("ERROR PLAYING SOUND: $e");
-        // This will print to your console if the file is not found or pubspec is wrong
       }
     }
   }
@@ -125,7 +113,6 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
     return "$hour:$minute $period";
   }
 
-  // --- NEW: Custom Ringtone Picker with Preview ---
   void _showRingtonePicker() {
     showModalBottomSheet(
       context: context,
@@ -133,7 +120,6 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        // We use a local state builder so the BottomSheet can update itself (radio buttons)
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
             return Container(
@@ -168,13 +154,10 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                           ),
                           onChanged: (value) {
                             if (value != null) {
-                              // 1. Play sound immediately
                               playRingtone(value);
-                              // 2. Update local state (visual radio button)
                               setModalState(() {
                                 selectedRingtone = value;
                               });
-                              // 3. Update parent state
                               setState(() {
                                 selectedRingtone = value;
                               });
@@ -193,7 +176,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                             borderRadius: BorderRadius.circular(10)),
                       ),
                       onPressed: () {
-                        audioPlayer.stop(); // Stop sound when closing
+                        audioPlayer.stop();
                         Navigator.pop(context);
                       },
                       child: const Text("Confirm Selection",
@@ -207,7 +190,6 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
         );
       },
     ).whenComplete(() {
-      // Ensure sound stops if user clicks outside the modal to close it
       audioPlayer.stop();
     });
   }
@@ -228,7 +210,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
 
       final med = Medicine(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        userId: "currentUser",
+        userId: "currentUser", // This will be overwritten by Controller
         name: medicineController.text,
         time: primaryTime,
         repeat: selectedRepeat,
@@ -239,8 +221,11 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
             : selectedPillCount,
         instruction: selectedInstruction,
         photo: selectedImage?.path,
-        createdAt: DateTime.now().toIso8601String(),
-        ringtone: '',
+
+        // ✅ FIXED HERE: Using millisecondsSinceEpoch (int) instead of String
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+
+        ringtone: selectedRingtone,
       );
 
       bool success =
@@ -418,7 +403,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
               ),
               const SizedBox(height: 15),
 
-              // 3. Ringtone Picker (MODIFIED)
+              // 3. Ringtone Picker
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
@@ -451,7 +436,7 @@ class _AddMedicinePageState extends State<AddMedicinePage> {
                           size: 14, color: Colors.pinkAccent),
                     ],
                   ),
-                  onTap: _showRingtonePicker, // Opens the picker to hear/select
+                  onTap: _showRingtonePicker,
                 ),
               ),
 

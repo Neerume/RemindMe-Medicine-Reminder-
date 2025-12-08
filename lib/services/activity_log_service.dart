@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/user_data_service.dart';
 
 // Enum
 enum NotificationType { taken, skipped, snoozed, scheduled }
@@ -40,31 +41,55 @@ class NotificationEntry {
 }
 
 class ActivityLogService {
-  // ⚠️ DEMO HACK: Fixed key so it ALWAYS saves/loads
-  static const String _key = 'demo_emergency_logs';
+  // ✅ FIX: Dynamic key generation based on Logged-in User
+  static Future<String> _getUserKey() async {
+    try {
+      // FIX: Changed type to Map<String, String?> to accept nullable values
+      final Map<String, String?> userData = await UserDataService.getUserData();
+
+      String? userId = userData['phone']; // unique identifier
+
+      if (userId != null && userId.isNotEmpty) {
+        return 'activity_logs_$userId'; // e.g. activity_logs_9800000000
+      }
+    } catch (e) {
+      print("Error getting user ID for logs: $e");
+    }
+    return 'activity_logs_guest'; // Fallback if no user found
+  }
 
   static Future<void> addLog(NotificationEntry entry) async {
     final prefs = await SharedPreferences.getInstance();
-    List<String> logs = prefs.getStringList(_key) ?? [];
+    final String key = await _getUserKey(); // Get dynamic key
+
+    List<String> logs = prefs.getStringList(key) ?? [];
 
     // Add to top
     logs.insert(0, jsonEncode(entry.toJson()));
 
-    await prefs.setStringList(_key, logs);
-    print("✅ FORCE SAVED LOG: ${entry.title}");
+    // Limit log size to prevent storage bloat (optional, keep last 50)
+    if (logs.length > 50) {
+      logs = logs.sublist(0, 50);
+    }
+
+    await prefs.setStringList(key, logs);
+    print("✅ SAVED LOG for $key: ${entry.title}");
   }
 
   static Future<List<NotificationEntry>> getLogs() async {
     final prefs = await SharedPreferences.getInstance();
-    List<String> logs = prefs.getStringList(_key) ?? [];
+    final String key = await _getUserKey(); // Get dynamic key
 
-    print("📂 LOADED ${logs.length} LOGS"); // Check console
+    List<String> logs = prefs.getStringList(key) ?? [];
+
+    print("📂 LOADED ${logs.length} LOGS for $key");
 
     return logs.map((e) => NotificationEntry.fromJson(jsonDecode(e))).toList();
   }
 
   static Future<void> clearLogs() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_key);
+    final String key = await _getUserKey();
+    await prefs.remove(key);
   }
 }

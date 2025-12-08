@@ -22,9 +22,11 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  // --- Controllers ---
+  // --- Controllers & Keys ---
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+  final GlobalKey<FormState> _formKey =
+      GlobalKey<FormState>(); // Added Form Key
   final ImagePicker _imagePicker = ImagePicker();
   final ScreenshotController _screenshotController = ScreenshotController();
 
@@ -57,8 +59,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
+    // 1. Validate Form before saving
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
     if (_user != null) {
       _user!.name = _usernameController.text.trim();
+      // Phone is read-only, we keep the existing one or the one in the controller
       _user!.phoneNumber = _phoneController.text.trim();
       _user!.photo = base64Image ?? backendPhotoBase64;
 
@@ -226,12 +234,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // --- SAVE LOGIC USING GAL ---
   Future<void> _saveReportToGallery(BuildContext dialogContext) async {
     try {
       final Uint8List? imageBytes = await _screenshotController.capture();
       if (imageBytes != null) {
-        // Gal handles permissions automatically
         await Gal.putImageBytes(imageBytes,
             name: "medical_report_${DateTime.now().millisecondsSinceEpoch}");
 
@@ -243,12 +249,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Navigator.pop(dialogContext);
       }
     } on GalException catch (e) {
-      if (!mounted) return; // Added check here
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: ${e.type.message}")),
       );
     } catch (e) {
-      if (!mounted) return; // Added check here
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error saving: $e")),
       );
@@ -491,18 +497,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    _buildProfileField(
-                        controller: _usernameController,
-                        label: 'Username',
-                        icon: Icons.person,
-                        enabled: _isEditing),
-                    const SizedBox(height: 18),
-                    _buildProfileField(
-                        controller: _phoneController,
-                        label: 'Phone',
-                        icon: Icons.phone,
-                        enabled: _isEditing,
-                        keyboardType: TextInputType.phone),
+                    // Wrapped fields in Form
+                    Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          _buildProfileField(
+                            controller: _usernameController,
+                            label: 'Username',
+                            icon: Icons.person,
+                            enabled: _isEditing,
+                            // Validation for Username
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Username cannot be empty';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 18),
+                          _buildProfileField(
+                            controller: _phoneController,
+                            label: 'Phone',
+                            icon: Icons.phone,
+                            // Phone is forced to be disabled (Read-only)
+                            enabled: false,
+                            keyboardType: TextInputType.phone,
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 28),
                     SizedBox(
                       width: double.infinity,
@@ -560,20 +584,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // Updated to use TextFormField to support validation
   Widget _buildProfileField({
     required TextEditingController controller,
     required String label,
     required IconData icon,
     bool enabled = true,
     TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
   }) {
-    return TextField(
+    return TextFormField(
       controller: controller,
       enabled: enabled,
       keyboardType: keyboardType,
+      validator: validator,
+      style: TextStyle(
+        color: enabled ? Colors.black : Colors.grey[700],
+      ),
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon),
+        prefixIcon:
+            Icon(icon, color: enabled ? Colors.grey[600] : Colors.grey[400]),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
         filled: !enabled,
         fillColor: enabled ? Colors.white : const Color(0xfff4f5f8),

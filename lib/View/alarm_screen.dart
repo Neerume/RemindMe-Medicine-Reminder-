@@ -6,7 +6,7 @@ import '../services/notification_service.dart';
 import '../services/activity_log_service.dart';
 import '../services/medicinelog_service.dart';
 import '../services/medicine_service.dart';
-// ✅ ADDED FOR STOCK UPDATE & REFILL CHECK
+
 import '../Controller/medicineController.dart';
 import '../Model/medicine.dart';
 import '../services/refill_alert_service.dart';
@@ -23,7 +23,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
   String currentDate = "";
   final ScrollController _scrollController = ScrollController();
 
-  // ✅ Added Controller
+  //  Added Controller
   final MedicineController _medicineController = MedicineController();
 
   @override
@@ -88,7 +88,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
         MedicineLogService().logAction(medicineId, "taken");
       }
 
-      // 3. ✅ UPDATE STOCK & CHECK REFILL
+      // 3.    UPDATE STOCK & CHECK REFILL
       try {
         final medicineService = MedicineService();
         final medicines = await medicineService.getMedicines();

@@ -1,123 +1,137 @@
-  import 'dart:convert';
-  import 'package:http/http.dart' as http;
-  import '../Model/medicine.dart';
-  import '../config/api.dart';
-  import '../services/user_data_service.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../Model/medicine.dart';
+import '../config/api.dart';
+import '../services/user_data_service.dart';
 
-  class MedicineService {
+class MedicineService {
+  // Fetch
+  Future<List<Medicine>> getMedicines() async {
+    try {
+      final token = await UserDataService.getToken();
+      final userData = await UserDataService.getUserData();
+      final String? currentUserId = userData['phone'];
 
-    /// Fetch all medicines for logged-in user
-    Future<List<Medicine>> getMedicines() async {
-      try {
-        final token = await UserDataService.getToken();
+      final response = await http.get(
+        Uri.parse(ApiConfig.viewMedicine),
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
+      );
 
-        final response = await http.get(
-          Uri.parse(ApiConfig.viewMedicine),
-          headers: {
-            "Authorization": "Bearer $token",
-            "Content-Type": "application/json",
-          },
-        );
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        if (data['medicines'] != null) {
+          final List medicinesJson = data['medicines'];
+          return medicinesJson.map((e) {
+            Medicine med = Medicine.fromJson(e);
 
-        if (response.statusCode == 200) {
-          final Map<String, dynamic> data = jsonDecode(response.body); // decode as Map
-          final List medicinesJson = data['medicines']; // get the medicines array
-          return medicinesJson.map((e) => Medicine.fromJson(e)).toList();
+            // Re-attach UserID if missing (Safety check)
+            if ((med.userId == null || med.userId!.isEmpty) &&
+                currentUserId != null) {
+              return Medicine(
+                id: med.id,
+                name: med.name,
+                dose: med.dose,
+                time: med.time,
+                instruction: med.instruction,
+                pillCount: med.pillCount,
+                photo: med.photo,
+                repeat: med.repeat,
+                ringtone: med.ringtone,
+                userId: currentUserId,
+                createdAt: med.createdAt,
+              );
+            }
+            return med;
+          }).toList();
         }
-
-      } catch (e) {
-        print("Error fetching medicine: $e");
       }
-      return [];
+    } catch (e) {
+      print("Error fetching: $e");
     }
-
-    /// Add medicine
-    Future<bool> addMedicine(Medicine med) async {
-      try {
-        final token = await UserDataService.getToken();
-        final response = await http.post(
-          Uri.parse(ApiConfig.addMedicine),
-          headers: {
-            "Authorization": "Bearer $token",
-            "Content-Type": "application/json",
-          },
-          body: jsonEncode(med.toJson()),
-        );
-        print("Response code: ${response.statusCode}");
-        print("Response body: ${response.body}");
-        print("Sending JSON: ${jsonEncode(med.toJson())}");
-
-        // Updated: Check for 200 or 201, OR parse the body for "success": true
-        if (response.statusCode == 200 || response.statusCode == 201) {
-          final responseData = jsonDecode(response.body);
-          return responseData['success'] == true;  // Extra safety check
-
-        }
-        return false;
-      } catch (e) {
-        print("Error adding medicine: $e");
-        return false;
-      }
-    }
-    /// Update medicine
-    Future<bool> updateMedicine(String id, Medicine med) async {
-      try {
-        final token = await UserDataService.getToken();
-
-        final response = await http.put(
-          Uri.parse("${ApiConfig.updateMedicine}/$id"),
-          headers: {
-            "Authorization": "Bearer $token",
-            "Content-Type": "application/json",
-          },
-          body: jsonEncode(med.toJson()),
-        );
-
-        return response.statusCode == 200;
-      } catch (e) {
-        print("Error updating medicine: $e");
-        return false;
-      }
-    }
-
-    /// Delete medicine
-    Future<bool> deleteMedicine(String id) async {
-      try {
-        final token = await UserDataService.getToken();
-
-        final response = await http.delete(
-          Uri.parse("${ApiConfig.deleteMedicine}/$id"),
-          headers: {
-            "Authorization": "Bearer $token",
-          },
-        );
-
-        return response.statusCode == 200;
-      } catch (e) {
-        print("Error deleting medicine: $e");
-        return false;
-      }
-    }
-    /// Fetch a single medicine by ID (from API)
-    Future<Medicine?> getMedicineById(int id) async {
-      try {
-        final token = await UserDataService.getToken();
-        final response = await http.get(
-          Uri.parse("${ApiConfig.viewMedicine}/$id"),
-          headers: {
-            "Authorization": "Bearer $token",
-            "Content-Type": "application/json",
-          },
-        );
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          return Medicine.fromJson(data['medicine']); // adjust according to your API
-        }
-      } catch (e) {
-        print("Error fetching medicine by ID: $e");
-      }
-      return null;
-    }
-
+    return [];
   }
+
+  // Add
+  Future<bool> addMedicine(Medicine med) async {
+    try {
+      final token = await UserDataService.getToken();
+      final response = await http.post(
+        Uri.parse(ApiConfig.addMedicine),
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode(med.toJson()),
+      );
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      print("Error adding: $e");
+      return false;
+    }
+  }
+
+  // Update
+  Future<bool> updateMedicine(String id, Medicine med) async {
+    try {
+      final token = await UserDataService.getToken();
+      final String cleanId = id.toString().trim();
+
+      // SAFETY: Don't send "null" string to backend
+      if (cleanId == "null" || cleanId.isEmpty) {
+        print("Error: Invalid ID 'null' detected. Cannot Update.");
+        return false;
+      }
+
+      final response = await http.put(
+        Uri.parse("${ApiConfig.updateMedicine}/$cleanId"),
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode(med.toJson()),
+      );
+
+      print("Update API Response: ${response.statusCode}");
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      print("Error updating: $e");
+      return false;
+    }
+  }
+
+  // Delete
+  Future<bool> deleteMedicine(String id) async {
+    try {
+      final token = await UserDataService.getToken();
+      final String cleanId = id.toString().trim();
+
+      // SAFETY: Don't send "null" string to backend
+      if (cleanId == "null" || cleanId.isEmpty) {
+        print("Error: Invalid ID 'null' detected. Cannot Delete.");
+        return false;
+      }
+
+      final response = await http.delete(
+        Uri.parse("${ApiConfig.deleteMedicine}/$cleanId"),
+        headers: {
+          "Authorization": "Bearer $token",
+          "Content-Type": "application/json",
+        },
+      );
+
+      print("Delete API Response: ${response.statusCode}");
+
+      // Accept 200 (OK), 201 (Created), or 204 (No Content)
+      return response.statusCode == 200 ||
+          response.statusCode == 201 ||
+          response.statusCode == 204;
+    } catch (e) {
+      print("Error deleting: $e");
+      return false;
+    }
+  }
+}

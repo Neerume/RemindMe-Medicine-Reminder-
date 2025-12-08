@@ -1,3 +1,4 @@
+// FILE: lib/Model/relationship_connection.dart
 class RelationshipConnection {
   final String relationshipId;
   final String role; // caregiver or patient
@@ -16,10 +17,10 @@ class RelationshipConnection {
   factory RelationshipConnection.fromCaregiverJson(Map<String, dynamic> json) {
     final inviter = (json['inviterId'] as Map?) ?? {};
     return RelationshipConnection(
-      relationshipId: json['_id'] ?? '',
+      relationshipId: (json['_id'] as String?) ?? '',
       role: 'caregiver',
-      name: inviter['name'] ?? 'Unknown caregiver',
-      phoneNumber: inviter['phoneNumber'] ?? '',
+      name: (inviter['name'] as String?) ?? 'Unknown caregiver',
+      phoneNumber: (inviter['phoneNumber'] as String?) ?? '',
       photo: inviter['photo'] as String?,
     );
   }
@@ -27,12 +28,11 @@ class RelationshipConnection {
   factory RelationshipConnection.fromPatientJson(Map<String, dynamic> json) {
     final invited = (json['invitedId'] as Map?) ?? {};
     return RelationshipConnection(
-      relationshipId: json['_id'] ?? '',
+      relationshipId: (json['_id'] as String?) ?? '',
       role: 'patient',
-      name: invited['name'] ?? 'Unknown patient',
-      phoneNumber: invited['phoneNumber'] ?? '',
+      name: (invited['name'] as String?) ?? 'Unknown patient',
+      phoneNumber: (invited['phoneNumber'] as String?) ?? '',
       photo: invited['photo'] as String?,
     );
   }
 }
-

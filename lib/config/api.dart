@@ -8,6 +8,7 @@ class ApiConfig {
   static const String getProfile = "$baseUrl/api/auth/profile";
   static const String updateProfile = "$baseUrl/api/auth/update";
 
+  // Medicine endpoints
   static const String addMedicine = "$baseUrl/api/medicine/addMedicine";
   static const String viewMedicine = "$baseUrl/api/medicine/getMedicine";
   static const String updateMedicine = "$baseUrl/api/medicine/updateMedicine";
@@ -25,7 +26,16 @@ class ApiConfig {
   static const String getPatients = "$baseUrl/api/relationship/patients";
   static const String deleteRelation = "$baseUrl/api/relationship/delete";
 
-  static String? get logAction => null;
+  // Helper methods
+  static String getCaregiversForUser(String userId) {
+    return "$getCaregivers?userId=$userId";
+  }
 
-  static get getReport => null;
+  static String getPatientsForUser(String userId) {
+    return "$getPatients?userId=$userId";
+  }
+
+  // Log and Report endpoints
+  static String get logAction => "$baseUrl/api/logs/action";
+  static String get getReport => "$baseUrl/api/reports/generate";
 }
