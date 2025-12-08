@@ -18,21 +18,18 @@ class InviteLinkService {
   StreamSubscription<Uri>? _sub;
   bool _initialized = false;
 
-  get initialRoute => null;
-
-  Object? get initialArgs => null;
-
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
-
-    final initialUri = await _appLinks.getInitialAppLink();
-    await _handleUri(initialUri);
 
     _sub = _appLinks.uriLinkStream.listen(
       (uri) => _handleUri(uri),
       onError: (err) => debugPrint('Invite link error: $err'),
     );
+  }
+
+  Future<void> handleInviteLink(Uri uri) async {
+    await _handleUri(uri);
   }
 
   Future<void> dispose() async {
@@ -80,11 +77,12 @@ class InviteLinkService {
     final navigator = AppNavigator.navigatorKey.currentState;
 
     if (userId == null) {
+      // If not logged in, go to signup
       navigator?.pushNamedAndRemoveUntil(AppRoutes.signup, (route) => false);
       return;
     }
 
-    // Send pending invite to backend
+    // Send pending invite to backend (Create the connection record)
     try {
       if (role == 'caregiver') {
         await RelationshipService.inviteCaregiver(
@@ -94,7 +92,9 @@ class InviteLinkService {
             inviterId: inviterId, inviteeId: userId);
       }
     } catch (e) {
-      debugPrint('Failed to create invite: $e');
+      // We log this, but we still navigate to the screen.
+      // If this failed, the user will see an error when they click "Accept" in the screen.
+      debugPrint('Failed to create invite connection: $e');
     }
 
     // Navigate to InviteScreen

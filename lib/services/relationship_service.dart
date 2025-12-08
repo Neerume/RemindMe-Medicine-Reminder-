@@ -1,6 +1,7 @@
 import 'dart:async';
 import '../Model/relationship_connection.dart';
 import '../config/api.dart';
+import 'user_data_service.dart';
 
 class RelationshipService {
   // Deep link configuration
