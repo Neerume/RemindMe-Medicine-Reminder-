@@ -61,6 +61,4 @@ flutter run
 
 This project was developed as a group project for learning and academic purposes. The backend service is maintained separately from this repository.
 
-## License
 
-This project is intended for educational and learning purposes.
